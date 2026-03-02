@@ -8,7 +8,8 @@ public class CameraOrbit : MonoBehaviour
 
     [Header("Orbit Settings")]
     public float distance = 15f;
-    public float height = 10f;
+    public float tiltAngle = 45f;
+    public float yawOffset = 0f;
 
     [Header("UI")]
     public Slider rotationSlider;
@@ -16,22 +17,18 @@ public class CameraOrbit : MonoBehaviour
     void Start()
     {
         if (rotationSlider != null)
-            rotationSlider.onValueChanged.AddListener(UpdateCamera);
+            rotationSlider.onValueChanged.AddListener(_ => { });
     }
 
-    void UpdateCamera(float value)
+    void LateUpdate()
     {
         if (target == null) return;
 
-        float angle = value * 360f;
+        float value = rotationSlider != null ? rotationSlider.value : 0f;
+        float yaw = (value * 360f) + yawOffset;
 
-        float rad = angle * Mathf.Deg2Rad;
-
-        Vector3 offset = new Vector3(
-            Mathf.Sin(rad) * distance,
-            height,
-            Mathf.Cos(rad) * distance
-        );
+        Quaternion rotation = Quaternion.Euler(tiltAngle, yaw, 0f);
+        Vector3 offset = rotation * new Vector3(0f, 0f, -distance);
 
         transform.position = target.position + offset;
         transform.LookAt(target.position);

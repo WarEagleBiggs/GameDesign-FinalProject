@@ -331,6 +331,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9f9146cdc8a2b194b94f28af26a15d1f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  tileCount: 20
   mapSize: 10
   noiseScale: 8
   heightMultiplier: 4
@@ -342,6 +343,9 @@ MonoBehaviour:
   brownMat: {fileID: 2100000, guid: b3c384e33c1e11341a83f9a1a1683f10, type: 2}
   greyMat: {fileID: 2100000, guid: 25c884d39148c96428675a29db6073d7, type: 2}
   whiteMat: {fileID: 2100000, guid: 57b57926e3c89c442ba1a5f51c5c1086, type: 2}
+  playerMat: {fileID: 2100000, guid: 3573200818b07df47812df722d2545dc, type: 2}
+  focusCameraOnPlayer: 1
+  cameraOrbit: {fileID: 1089303711}
   doGen: 0
 --- !u!1 &343542475
 GameObject:
