@@ -16,20 +16,25 @@ public class Player : MonoBehaviour
     public int moveRange = 3;
     public bool allowDiagonal = true;
 
-    private Material blueMat;
+    [Header("Highlight")]
+    public Material highlightBlueMat;
 
     private readonly Dictionary<Renderer, Material> originalMats = new Dictionary<Renderer, Material>();
     private readonly HashSet<Transform> highlightedTiles = new HashSet<Transform>();
 
-    private GameObject exitObj;
+    private class ExitInfo
+    {
+        public GameObject obj;
+        public MapGenerator.EntryDirection side;
+        public int exitX;
+        public int exitZ;
+    }
+
+    private readonly List<ExitInfo> exits = new List<ExitInfo>();
 
     void Awake()
     {
         if (cam == null) cam = Camera.main;
-
-        Shader s = Shader.Find("Standard");
-        blueMat = new Material(s);
-        blueMat.color = Color.blue;
     }
 
     void Update()
@@ -39,14 +44,14 @@ public class Player : MonoBehaviour
         if (!turn)
         {
             ClearHighlights();
-            DestroyExit();
+            DestroyExits();
             return;
         }
 
         if (highlightedTiles.Count == 0)
         {
             HighlightMovable();
-            UpdateExitTile();
+            UpdateExitTiles();
         }
 
         if (Input.GetMouseButtonDown(0))
@@ -63,10 +68,15 @@ public class Player : MonoBehaviour
         Transform t = hit.collider != null ? hit.collider.transform : null;
         if (t == null) return;
 
-        if (exitObj != null && t.gameObject == exitObj)
+        for (int i = 0; i < exits.Count; i++)
         {
-            TryLoadNextChunkFromExit();
-            return;
+            if (exits[i].obj != null && t.gameObject == exits[i].obj)
+            {
+                mapGen.TravelToNeighborChunk(exits[i].side, exits[i].exitX, exits[i].exitZ);
+                DestroyExits();
+                ClearHighlights();
+                return;
+            }
         }
 
         if (!t.name.StartsWith("Tile_")) return;
@@ -76,33 +86,7 @@ public class Player : MonoBehaviour
 
         ClearHighlights();
         HighlightMovable();
-        UpdateExitTile();
-    }
-
-    void TryLoadNextChunkFromExit()
-    {
-        Transform currentTile = GetTileUnderPlayer();
-        if (currentTile == null) return;
-
-        if (!TryParseTileCoords(currentTile.name, out int cx, out int cz)) return;
-
-        int n = mapGen.tileCount;
-
-        if (cx == 0)
-            mapGen.RegenerateAndPlacePlayerOnEdge(MapGenerator.EntryDirection.East);  // moved West, came from East
-        else if (cx == n - 1)
-            mapGen.RegenerateAndPlacePlayerOnEdge(MapGenerator.EntryDirection.West);  // moved East, came from West
-        else if (cz == 0)
-            mapGen.RegenerateAndPlacePlayerOnEdge(MapGenerator.EntryDirection.North); // moved South, came from North
-        else if (cz == n - 1)
-            mapGen.RegenerateAndPlacePlayerOnEdge(MapGenerator.EntryDirection.South); // moved North, came from South
-        else
-            return;
-
-        DestroyExit();
-        ClearHighlights();
-        HighlightMovable();
-        UpdateExitTile();
+        UpdateExitTiles();
     }
 
     void HighlightMovable()
@@ -118,6 +102,7 @@ public class Player : MonoBehaviour
         for (int i = 0; i < mapGen.transform.childCount; i++)
         {
             Transform tile = mapGen.transform.GetChild(i);
+            if (!tile.name.StartsWith("Tile_")) continue;
 
             if (!TryParseTileCoords(tile.name, out int tx, out int tz))
                 continue;
@@ -137,14 +122,16 @@ public class Player : MonoBehaviour
             if (!originalMats.ContainsKey(r))
                 originalMats[r] = r.sharedMaterial;
 
-            r.sharedMaterial = blueMat;
+            if (highlightBlueMat != null)
+                r.sharedMaterial = highlightBlueMat;
+
             highlightedTiles.Add(tile);
         }
     }
 
-    void UpdateExitTile()
+    void UpdateExitTiles()
     {
-        DestroyExit();
+        DestroyExits();
 
         Transform currentTile = GetTileUnderPlayer();
         if (currentTile == null) return;
@@ -154,33 +141,36 @@ public class Player : MonoBehaviour
         int n = mapGen.tileCount;
         float tileSizeWorld = GetTileSizeWorld();
 
-        Vector3 dir = Vector3.zero;
-
-        if (cx == 0) dir = Vector3.left;
-        else if (cx == n - 1) dir = Vector3.right;
-        else if (cz == 0) dir = Vector3.back;
-        else if (cz == n - 1) dir = Vector3.forward;
-        else return;
-
-        exitObj = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        exitObj.name = "Exit";
-        exitObj.transform.SetParent(mapGen.transform, false);
-
-        Renderer r = exitObj.GetComponent<Renderer>();
-        if (r != null) r.sharedMaterial = blueMat;
-
-        exitObj.transform.localScale = Vector3.one * tileSizeWorld;
-
-        Vector3 pos = currentTile.position + dir * tileSizeWorld;
-        pos.y = tileSizeWorld * 0.5f;
-        exitObj.transform.position = pos;
+        if (cx == 0) CreateExit(MapGenerator.EntryDirection.West, cx, cz, Vector3.left, tileSizeWorld, currentTile.position);
+        if (cx == n - 1) CreateExit(MapGenerator.EntryDirection.East, cx, cz, Vector3.right, tileSizeWorld, currentTile.position);
+        if (cz == 0) CreateExit(MapGenerator.EntryDirection.South, cx, cz, Vector3.back, tileSizeWorld, currentTile.position);
+        if (cz == n - 1) CreateExit(MapGenerator.EntryDirection.North, cx, cz, Vector3.forward, tileSizeWorld, currentTile.position);
     }
 
-    void DestroyExit()
+    void CreateExit(MapGenerator.EntryDirection side, int exitX, int exitZ, Vector3 dir, float tileSizeWorld, Vector3 fromPos)
     {
-        if (exitObj != null)
-            Destroy(exitObj);
-        exitObj = null;
+        GameObject e = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        e.name = $"Exit_{side}";
+        e.transform.SetParent(transform, true);
+
+        Renderer r = e.GetComponent<Renderer>();
+        if (r != null && highlightBlueMat != null)
+            r.sharedMaterial = highlightBlueMat;
+
+        e.transform.localScale = Vector3.one * tileSizeWorld * 4;
+
+        Vector3 pos = fromPos + dir * tileSizeWorld;
+        pos.y = tileSizeWorld * 0.5f;
+        e.transform.position = pos;
+
+        exits.Add(new ExitInfo { obj = e, side = side, exitX = exitX, exitZ = exitZ });
+    }
+
+    void DestroyExits()
+    {
+        for (int i = 0; i < exits.Count; i++)
+            if (exits[i].obj != null) Destroy(exits[i].obj);
+        exits.Clear();
     }
 
     void MovePlayerToTile(Transform tile)
@@ -240,17 +230,12 @@ public class Player : MonoBehaviour
 
     float GetTileSizeWorld()
     {
-        return mapGen != null ? (GetMapSize() / mapGen.tileCount) : 1f;
-    }
-
-    float GetMapSize()
-    {
         Transform t00 = mapGen.transform.Find("Tile_0_0");
         Transform t10 = mapGen.transform.Find("Tile_1_0");
         if (t00 != null && t10 != null)
-            return Mathf.Abs(t10.localPosition.x - t00.localPosition.x) * mapGen.tileCount;
+            return Mathf.Abs(t10.position.x - t00.position.x);
 
-        return 10f;
+        return 1f;
     }
 
     void ClearHighlights()
