@@ -75,8 +75,6 @@ public class MapGenerator : MonoBehaviour
         }
     }
 
-    // exitSide = which edge you leave CURRENT chunk from
-    // exitX/exitZ = tile coords on CURRENT chunk you are standing on when you leave
     public void TravelToNeighborChunk(EntryDirection exitSide, int exitX, int exitZ)
     {
         if (exitSide == EntryDirection.West)  currentChunk += new Vector2Int(-1, 0);
@@ -84,14 +82,12 @@ public class MapGenerator : MonoBehaviour
         if (exitSide == EntryDirection.South) currentChunk += new Vector2Int( 0,-1);
         if (exitSide == EntryDirection.North) currentChunk += new Vector2Int( 0, 1);
 
-        // You enter the next chunk FROM the opposite side
         EntryDirection entrySide =
             exitSide == EntryDirection.West  ? EntryDirection.East  :
             exitSide == EntryDirection.East  ? EntryDirection.West  :
             exitSide == EntryDirection.South ? EntryDirection.North :
                                                EntryDirection.South;
 
-        // Desired entry tile is the "same row/column" but on the opposite edge
         int entryX = exitX;
         int entryZ = exitZ;
 
@@ -198,6 +194,7 @@ public class MapGenerator : MonoBehaviour
         {
             playerObj = GameObject.CreatePrimitive(PrimitiveType.Cube);
             playerObj.name = "Player";
+            playerObj.layer = LayerMask.NameToLayer("XRay");
         }
 
         playerObj.transform.localScale = Vector3.one * tileSizeWorld;
@@ -236,8 +233,6 @@ public class MapGenerator : MonoBehaviour
         PlacePlayerOnTile(tiles[chosen.x, chosen.y]);
     }
 
-    // KEY FIX: if desired is blocked, find green ON THE ENTRY EDGE FIRST (same edge line),
-    // so backtracking always returns to the correct neighbor.
     void SpawnPlayerAtDesiredOrEdgeFallback(Vector2Int desired, EntryDirection entrySide)
     {
         int x = Mathf.Clamp(desired.x, 0, tileCount - 1);
@@ -253,12 +248,8 @@ public class MapGenerator : MonoBehaviour
         if (rr != null && blockedRedMat != null)
             rr.sharedMaterial = blockedRedMat;
 
-        // 1) Try same ENTRY EDGE, closest to the intended z/x
-        // entrySide tells which edge we are coming in on:
-        // West edge = x=0, East edge = x=n-1, South edge = z=0, North edge = z=n-1
         List<Vector2Int> edge = GetEdgeCoords(entrySide);
 
-        // sort by distance along edge to intended spot
         edge.Sort((a, b) =>
         {
             int da = Mathf.Abs(a.x - x) + Mathf.Abs(a.y - z);
@@ -277,7 +268,6 @@ public class MapGenerator : MonoBehaviour
             }
         }
 
-        // 2) If entire edge is blocked, fall back to nearest green anywhere
         for (int r = 1; r < tileCount; r++)
         {
             for (int dx = -r; dx <= r; dx++)

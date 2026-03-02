@@ -202,7 +202,7 @@ MonoBehaviour:
   mapSize: 10
   worldSeed: 12345
   noiseScale: 8
-  heightMultiplier: 4
+  heightMultiplier: 2.5
   wallThreshold: 0.5
   baseMat: {fileID: 2100000, guid: 6b55a020895e77d4fb80e87c1662bf13, type: 2}
   greenMatA: {fileID: 2100000, guid: 77e50f8272c4b5c45ac105d55a58de33, type: 2}
@@ -796,7 +796,7 @@ MonoBehaviour:
   tiltAngle: 45
   yawOffset: 0
   rotationSlider: {fileID: 1270340110}
-  snapDegrees: 15
+  snapDegrees: 45
   zoomSlider: {fileID: 1364580102}
   minOrthoSize: 1
   maxOrthoSize: 5
@@ -955,7 +955,7 @@ MonoBehaviour:
   m_MinValue: 0
   m_MaxValue: 1
   m_WholeNumbers: 0
-  m_Value: 0
+  m_Value: 0.416
   m_OnValueChanged:
     m_PersistentCalls:
       m_Calls: []
