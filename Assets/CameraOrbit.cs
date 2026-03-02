@@ -52,7 +52,7 @@ public class CameraOrbit : MonoBehaviour
     {
         float sliderValue = rotationSlider != null ? rotationSlider.value : 0f;
 
-        float yaw = (sliderValue * 360f) + yawOffset;
+        float yaw = (sliderValue * 360f * 3) + yawOffset;
 
         if (snapDegrees > 0f)
             yaw = Mathf.Round(yaw / snapDegrees) * snapDegrees;
