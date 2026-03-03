@@ -17,17 +17,4 @@ public class PerlinNoiseGenerator : MonoBehaviour
         offsetY = Random.Range(-10000f, 10000f);
     }
 
-    public float GetWallHeight(float x, float z)
-    {
-        float xCoord = (x / scale) + offsetX;
-        float zCoord = (z / scale) + offsetY;
-
-        float noise = Mathf.PerlinNoise(xCoord, zCoord);
-
-        if (noise < wallThreshold)
-            return 0f;   
-
-        float normalized = (noise - wallThreshold) / (1f - wallThreshold);
-        return normalized * heightMultiplier;
-    }
 }

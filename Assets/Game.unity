@@ -250,7 +250,7 @@ MonoBehaviour:
   blockedRedMat: {fileID: 0}
   playerMat: {fileID: 2100000, guid: 3573200818b07df47812df722d2545dc, type: 2}
   highlightBlueMat: {fileID: 2100000, guid: a492922b57e1ffe4daeab992b1ed29bb, type: 2}
-  playerMoveRange: 1
+  playerMoveRange: 2
   allowDiagonalMovement: 1
   focusCameraOnPlayer: 1
   cameraOrbit: {fileID: 1089303711}
@@ -716,9 +716,7 @@ MonoBehaviour:
   target: {fileID: 282374642}
   distance: 15
   tiltAngle: 45
-  yawOffset: 0
   rotationSlider: {fileID: 1115177245}
-  snapDegrees: 45
   zoomSlider: {fileID: 1364580102}
   minOrthoSize: 1
   maxOrthoSize: 10

@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.UI;
 
+[RequireComponent(typeof(Camera))]
 public class CameraOrbit : MonoBehaviour
 {
     [Header("Target")]
@@ -9,11 +10,9 @@ public class CameraOrbit : MonoBehaviour
     [Header("Orbit Settings")]
     public float distance = 15f;
     public float tiltAngle = 45f;
-    public float yawOffset = 0f;
 
-    [Header("Rotation Slider")]
+    [Header("Rotation Slider (4 fixed isometric views)")]
     public Slider rotationSlider;
-    public float snapDegrees = 15f;
 
     [Header("Zoom Slider (Orthographic)")]
     public Slider zoomSlider;
@@ -28,8 +27,14 @@ public class CameraOrbit : MonoBehaviour
         cam = GetComponent<Camera>();
 
         if (cam != null && cam.orthographic)
-        {
             cam.orthographicSize = defaultOrthoSize;
+
+        if (rotationSlider != null)
+        {
+            rotationSlider.minValue = 0f;
+            rotationSlider.maxValue = 1f;
+            rotationSlider.wholeNumbers = false;
+            rotationSlider.value = 0f;
         }
 
         if (zoomSlider != null)
@@ -50,12 +55,12 @@ public class CameraOrbit : MonoBehaviour
 
     void UpdateRotation()
     {
-        float sliderValue = rotationSlider != null ? rotationSlider.value : 0f;
+        float t = rotationSlider != null ? rotationSlider.value : 0f;
 
-        float yaw = (sliderValue * 360f * 3) + yawOffset;
+        int index = Mathf.RoundToInt(t * 3f);
+        index = Mathf.Clamp(index, 0, 3);
 
-        if (snapDegrees > 0f)
-            yaw = Mathf.Round(yaw / snapDegrees) * snapDegrees;
+        float yaw = 45f + (index * 90f);
 
         Quaternion rotation = Quaternion.Euler(tiltAngle, yaw, 0f);
         Vector3 offset = rotation * new Vector3(0f, 0f, -distance);
@@ -68,9 +73,7 @@ public class CameraOrbit : MonoBehaviour
     {
         if (cam == null || !cam.orthographic || zoomSlider == null) return;
 
-        float t = zoomSlider.value;
-        float size = Mathf.Lerp(minOrthoSize, maxOrthoSize, t);
-
+        float size = Mathf.Lerp(minOrthoSize, maxOrthoSize, zoomSlider.value);
         cam.orthographicSize = size;
     }
 }
