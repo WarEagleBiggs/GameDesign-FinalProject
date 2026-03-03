@@ -576,6 +576,7 @@ GameObject:
   - component: {fileID: 1089303707}
   - component: {fileID: 1089303710}
   - component: {fileID: 1089303711}
+  - component: {fileID: 1089303712}
   m_Layer: 0
   m_Name: Main Camera
   m_TagString: MainCamera
@@ -721,6 +722,22 @@ MonoBehaviour:
   minOrthoSize: 1
   maxOrthoSize: 10
   defaultOrthoSize: 5
+--- !u!114 &1089303712
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1089303706}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 62760f92285399e4b8aab1435c71c273, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  target: {fileID: 0}
+  cam: {fileID: 1089303708}
+  radiusWorld: 3
+  onlyIfOccluding: 1
 --- !u!1 &1090656346
 GameObject:
   m_ObjectHideFlags: 0

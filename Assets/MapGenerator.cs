@@ -77,14 +77,14 @@ public class MapGenerator : MonoBehaviour
 
     public void TravelToNeighborChunk(EntryDirection exitSide, int exitX, int exitZ)
     {
-        if (exitSide == EntryDirection.West)  currentChunk += new Vector2Int(-1, 0);
-        if (exitSide == EntryDirection.East)  currentChunk += new Vector2Int( 1, 0);
-        if (exitSide == EntryDirection.South) currentChunk += new Vector2Int( 0,-1);
-        if (exitSide == EntryDirection.North) currentChunk += new Vector2Int( 0, 1);
+        if (exitSide == EntryDirection.West) currentChunk += new Vector2Int(-1, 0);
+        if (exitSide == EntryDirection.East) currentChunk += new Vector2Int(1, 0);
+        if (exitSide == EntryDirection.South) currentChunk += new Vector2Int(0, -1);
+        if (exitSide == EntryDirection.North) currentChunk += new Vector2Int(0, 1);
 
         EntryDirection entrySide =
-            exitSide == EntryDirection.West  ? EntryDirection.East  :
-            exitSide == EntryDirection.East  ? EntryDirection.West  :
+            exitSide == EntryDirection.West ? EntryDirection.East :
+            exitSide == EntryDirection.East ? EntryDirection.West :
             exitSide == EntryDirection.South ? EntryDirection.North :
                                                EntryDirection.South;
 
@@ -211,6 +211,13 @@ public class MapGenerator : MonoBehaviour
         p.highlightBlueMat = highlightBlueMat;
         p.moveRange = playerMoveRange;
         p.allowDiagonal = allowDiagonalMovement;
+
+        TileCutout cut = FindObjectOfType<TileCutout>();
+        if (cut != null)
+        {
+            cut.target = playerObj.transform;
+            if (cut.cam == null) cut.cam = Camera.main;
+        }
     }
 
     void SpawnPlayerOnSafeGreenCell()
