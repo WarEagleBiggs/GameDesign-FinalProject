@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 
 public class MapGenerator : MonoBehaviour
@@ -47,6 +48,13 @@ public class MapGenerator : MonoBehaviour
     [Header("Spawn Rules")]
     public bool require3x3GreenForStart = true;
 
+    [Header("Tile Layers (create these in Project Settings > Tags and Layers)")]
+    public string walkableLayerName = "Walkable";
+    public string blockedLayerName = "Blocked";
+
+    [Header("UI")]
+    public TextMeshProUGUI chunkText;
+
     [Header("Debug")]
     public bool doGen;
 
@@ -59,8 +67,18 @@ public class MapGenerator : MonoBehaviour
 
     private Vector2Int currentChunk = Vector2Int.zero;
 
+    private int walkableLayer = -1;
+    private int blockedLayer = -1;
+
+    void Awake()
+    {
+        walkableLayer = LayerMask.NameToLayer(walkableLayerName);
+        blockedLayer = LayerMask.NameToLayer(blockedLayerName);
+    }
+
     void Start()
     {
+        UpdateChunkUI();
         LoadChunk(currentChunk, null, null);
         ApplyCameraTargetIfEnabled();
     }
@@ -70,9 +88,16 @@ public class MapGenerator : MonoBehaviour
         if (doGen)
         {
             doGen = false;
+            UpdateChunkUI();
             LoadChunk(currentChunk, null, null);
             ApplyCameraTargetIfEnabled();
         }
+    }
+
+    void UpdateChunkUI()
+    {
+        if (chunkText != null)
+            chunkText.SetText($"CHUNK: {currentChunk.x}, {currentChunk.y}");
     }
 
     public void TravelToNeighborChunk(EntryDirection exitSide, int exitX, int exitZ)
@@ -81,6 +106,8 @@ public class MapGenerator : MonoBehaviour
         if (exitSide == EntryDirection.East) currentChunk += new Vector2Int(1, 0);
         if (exitSide == EntryDirection.South) currentChunk += new Vector2Int(0, -1);
         if (exitSide == EntryDirection.North) currentChunk += new Vector2Int(0, 1);
+
+        UpdateChunkUI();
 
         EntryDirection entrySide =
             exitSide == EntryDirection.West ? EntryDirection.East :
@@ -158,7 +185,9 @@ public class MapGenerator : MonoBehaviour
                 float extraHeight = 0f;
                 float normalizedHeight = 0f;
 
-                if (noise >= wallThreshold)
+                bool isBlocked = noise >= wallThreshold;
+
+                if (isBlocked)
                 {
                     normalizedHeight = (noise - wallThreshold) / (1f - wallThreshold);
                     extraHeight = normalizedHeight * heightMultiplier;
@@ -177,6 +206,15 @@ public class MapGenerator : MonoBehaviour
                 cube.transform.localScale = new Vector3(tileSizeWorld, totalHeight, tileSizeWorld);
                 cube.transform.localPosition = new Vector3(xPos, totalHeight * 0.5f, zPos);
                 cube.name = $"Tile_{x}_{z}";
+
+                if (isBlocked)
+                {
+                    if (blockedLayer != -1) cube.layer = blockedLayer;
+                }
+                else
+                {
+                    if (walkableLayer != -1) cube.layer = walkableLayer;
+                }
 
                 tiles[x, z] = cube.transform;
                 isGreen[x, z] = picked == greenMatA || picked == greenMatB || picked == greenMatC;
@@ -213,11 +251,7 @@ public class MapGenerator : MonoBehaviour
         p.allowDiagonal = allowDiagonalMovement;
 
         TileCutout cut = FindObjectOfType<TileCutout>();
-        if (cut != null)
-        {
-            cut.target = playerObj.transform;
-            if (cut.cam == null) cut.cam = Camera.main;
-        }
+        if (cut != null) cut.target = playerObj.transform;
     }
 
     void SpawnPlayerOnSafeGreenCell()

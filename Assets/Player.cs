@@ -19,6 +19,34 @@ public class Player : MonoBehaviour
     [Header("Highlight")]
     public Material highlightBlueMat;
 
+    [Header("Camera Occlusion Flatten (Fallout 1 style)")]
+    public bool flattenWhenBlockingCamera = true;
+
+    [Tooltip("Only tiles hit by the camera->player ray are flattened.")]
+    public bool raycastOnly = true;
+
+    [Tooltip("Use SphereCast instead of Raycast (helps if player is wider / camera angle).")]
+    public bool useSphereCast = true;
+
+    [Range(0.0f, 2.0f)]
+    public float sphereRadius = 0.25f;
+
+    [Tooltip("Only flatten these materials (non-walkable tall tiles).")]
+    public bool flattenBrown = true;
+    public bool flattenGrey = true;
+    public bool flattenWhite = true;
+
+    [Tooltip("Height to flatten to, as a multiple of base tile size (1 = same height as green tiles).")]
+    [Range(0.25f, 3f)]
+    public float flatHeightMultiplier = 1f;
+
+    [Tooltip("Optional safety limit per move.")]
+    [Range(1, 256)]
+    public int maxTilesToFlattenPerMove = 64;
+
+    [Tooltip("Physics mask for occluders. Leave as Everything unless you have special layers.")]
+    public LayerMask occluderMask = ~0;
+
     private readonly Dictionary<Renderer, Material> originalMats = new Dictionary<Renderer, Material>();
     private readonly HashSet<Transform> highlightedTiles = new HashSet<Transform>();
 
@@ -93,10 +121,89 @@ public class Player : MonoBehaviour
 
             MovePlayerToTile(ht);
 
+            if (flattenWhenBlockingCamera)
+                FlattenTilesBlockingCamera();
+
             ClearHighlights();
             HighlightMovable();
             UpdateExitTiles();
             return;
+        }
+    }
+
+    void FlattenTilesBlockingCamera()
+    {
+        if (mapGen == null || cam == null) return;
+
+        float tileSize = GetTileSizeWorld();
+        float flatHeight = tileSize * flatHeightMultiplier;
+
+        Vector3 camPos = cam.transform.position;
+        Vector3 playerPos = transform.position;
+
+        Vector3 dir = playerPos - camPos;
+        float dist = dir.magnitude;
+        if (dist <= 0.001f) return;
+        dir /= dist;
+
+        RaycastHit[] hits;
+
+        if (raycastOnly)
+        {
+            if (useSphereCast)
+                hits = Physics.SphereCastAll(camPos, sphereRadius, dir, dist, occluderMask, QueryTriggerInteraction.Ignore);
+            else
+                hits = Physics.RaycastAll(camPos, dir, dist, occluderMask, QueryTriggerInteraction.Ignore);
+        }
+        else
+        {
+            hits = Physics.OverlapSphere(playerPos, tileSize * 6f, occluderMask, QueryTriggerInteraction.Ignore) != null
+                ? Physics.SphereCastAll(camPos, sphereRadius, dir, dist, occluderMask, QueryTriggerInteraction.Ignore)
+                : null;
+        }
+
+        if (hits == null || hits.Length == 0) return;
+
+        System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+
+        int flattened = 0;
+
+        for (int i = 0; i < hits.Length; i++)
+        {
+            if (flattened >= maxTilesToFlattenPerMove) return;
+
+            Collider c = hits[i].collider;
+            if (c == null) continue;
+
+            Transform t = c.transform;
+            if (t == null) continue;
+
+            if (t == transform || t.IsChildOf(transform)) continue;
+
+            if (!t.name.StartsWith("Tile_")) continue;
+
+            Renderer r = t.GetComponent<Renderer>();
+            if (r == null) continue;
+
+            Material m = r.sharedMaterial;
+            bool isBlockingMat =
+                (flattenBrown && m == mapGen.brownMat) ||
+                (flattenGrey && m == mapGen.greyMat) ||
+                (flattenWhite && m == mapGen.whiteMat);
+
+            if (!isBlockingMat) continue;
+
+            Vector3 s = t.localScale;
+            if (s.y <= flatHeight + 0.0001f) continue;
+
+            s.y = flatHeight;
+            t.localScale = s;
+
+            Vector3 lp = t.localPosition;
+            lp.y = flatHeight * 0.5f;
+            t.localPosition = lp;
+
+            flattened++;
         }
     }
 

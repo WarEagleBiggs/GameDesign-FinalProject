@@ -10,12 +10,17 @@ public class TileCutout : MonoBehaviour
     public float radiusWorld = 3f;
     public bool onlyIfOccluding = true;
 
+    [Header("Only affect this layer")]
+    public string blockedLayerName = "Blocked";
+
+    private int blockedLayer = -1;
     private readonly HashSet<Renderer> hidden = new HashSet<Renderer>();
 
     void Awake()
     {
         if (cam == null) cam = GetComponent<Camera>();
         if (cam == null) cam = Camera.main;
+        blockedLayer = LayerMask.NameToLayer(blockedLayerName);
     }
 
     void LateUpdate()
@@ -46,6 +51,8 @@ public class TileCutout : MonoBehaviour
             Transform tile = root.GetChild(i);
             if (tile == null) continue;
             if (!tile.name.StartsWith("Tile_")) continue;
+
+            if (blockedLayer != -1 && tile.gameObject.layer != blockedLayer) continue;
 
             Vector3 p = tile.position; p.y = 0f;
             Vector3 c = center; c.y = 0f;
