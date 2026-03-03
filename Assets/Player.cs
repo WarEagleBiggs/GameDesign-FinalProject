@@ -63,30 +63,41 @@ public class Player : MonoBehaviour
         if (cam == null) return;
 
         Ray ray = cam.ScreenPointToRay(Input.mousePosition);
-        if (!Physics.Raycast(ray, out RaycastHit hit, 1000f)) return;
 
-        Transform t = hit.collider != null ? hit.collider.transform : null;
-        if (t == null) return;
+        RaycastHit[] hits = Physics.RaycastAll(ray, 2000f, ~0, QueryTriggerInteraction.Ignore);
+        if (hits == null || hits.Length == 0) return;
 
-        for (int i = 0; i < exits.Count; i++)
+        System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+
+        for (int i = 0; i < hits.Length; i++)
         {
-            if (exits[i].obj != null && t.gameObject == exits[i].obj)
+            if (hits[i].collider == null) continue;
+
+            Transform ht = hits[i].collider.transform;
+            if (ht == null) continue;
+
+            for (int e = 0; e < exits.Count; e++)
             {
-                mapGen.TravelToNeighborChunk(exits[i].side, exits[i].exitX, exits[i].exitZ);
-                DestroyExits();
-                ClearHighlights();
-                return;
+                if (exits[e].obj != null && ht.gameObject == exits[e].obj)
+                {
+                    mapGen.TravelToNeighborChunk(exits[e].side, exits[e].exitX, exits[e].exitZ);
+                    DestroyExits();
+                    ClearHighlights();
+                    return;
+                }
             }
+
+            if (!ht.name.StartsWith("Tile_")) continue;
+
+            if (!highlightedTiles.Contains(ht)) return;
+
+            MovePlayerToTile(ht);
+
+            ClearHighlights();
+            HighlightMovable();
+            UpdateExitTiles();
+            return;
         }
-
-        if (!t.name.StartsWith("Tile_")) return;
-        if (!highlightedTiles.Contains(t)) return;
-
-        MovePlayerToTile(t);
-
-        ClearHighlights();
-        HighlightMovable();
-        UpdateExitTiles();
     }
 
     void HighlightMovable()
@@ -102,6 +113,7 @@ public class Player : MonoBehaviour
         for (int i = 0; i < mapGen.transform.childCount; i++)
         {
             Transform tile = mapGen.transform.GetChild(i);
+
             if (!tile.name.StartsWith("Tile_")) continue;
 
             if (!TryParseTileCoords(tile.name, out int tx, out int tz))
@@ -157,7 +169,7 @@ public class Player : MonoBehaviour
         if (r != null && highlightBlueMat != null)
             r.sharedMaterial = highlightBlueMat;
 
-        e.transform.localScale = Vector3.one * tileSizeWorld * 4;
+        e.transform.localScale = Vector3.one * tileSizeWorld * 4f;
 
         Vector3 pos = fromPos + dir * tileSizeWorld;
         pos.y = tileSizeWorld * 0.5f;
@@ -189,7 +201,7 @@ public class Player : MonoBehaviour
     {
         Vector3 origin = transform.position + Vector3.up * 5f;
 
-        RaycastHit[] hits = Physics.RaycastAll(origin, Vector3.down, 100f);
+        RaycastHit[] hits = Physics.RaycastAll(origin, Vector3.down, 200f, ~0, QueryTriggerInteraction.Ignore);
         if (hits == null || hits.Length == 0) return null;
 
         System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
