@@ -19,6 +19,13 @@ public class Player : MonoBehaviour
     [Header("Highlight")]
     public Material highlightBlueMat;
 
+    [Header("Hover (Selected Tile)")]
+    public bool hoverSelectEnabled = true;
+    public Material hoverSelectedMat;
+    [Range(0.01f, 50f)]
+    public float hoverRayDistance = 2000f;
+    public LayerMask hoverMask = ~0;
+
     [Header("Camera Occlusion Flatten (Fallout 1 style)")]
     public bool flattenWhenBlockingCamera = true;
 
@@ -50,6 +57,10 @@ public class Player : MonoBehaviour
     private readonly Dictionary<Renderer, Material> originalMats = new Dictionary<Renderer, Material>();
     private readonly HashSet<Transform> highlightedTiles = new HashSet<Transform>();
 
+    private Transform hoveredTile;
+    private Renderer hoveredRenderer;
+    private Material hoveredPrevMat;
+
     private class ExitInfo
     {
         public GameObject obj;
@@ -71,6 +82,7 @@ public class Player : MonoBehaviour
 
         if (!turn)
         {
+            ClearHover();
             ClearHighlights();
             DestroyExits();
             return;
@@ -82,8 +94,72 @@ public class Player : MonoBehaviour
             UpdateExitTiles();
         }
 
+        UpdateHover();
+
         if (Input.GetMouseButtonDown(0))
             HandleClick();
+    }
+
+    void UpdateHover()
+    {
+        if (!hoverSelectEnabled || cam == null)
+        {
+            ClearHover();
+            return;
+        }
+
+        Ray ray = cam.ScreenPointToRay(Input.mousePosition);
+        RaycastHit[] hits = Physics.RaycastAll(ray, hoverRayDistance, hoverMask, QueryTriggerInteraction.Ignore);
+        if (hits == null || hits.Length == 0)
+        {
+            ClearHover();
+            return;
+        }
+
+        System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+
+        Transform best = null;
+        Renderer bestR = null;
+
+        for (int i = 0; i < hits.Length; i++)
+        {
+            if (hits[i].collider == null) continue;
+
+            Transform t = hits[i].collider.transform;
+            if (t == null) continue;
+            if (!t.name.StartsWith("Tile_")) continue;
+            if (!highlightedTiles.Contains(t)) continue;
+
+            best = t;
+            bestR = t.GetComponent<Renderer>();
+            break;
+        }
+
+        if (best == null || bestR == null || hoverSelectedMat == null)
+        {
+            ClearHover();
+            return;
+        }
+
+        if (hoveredTile == best && hoveredRenderer == bestR) return;
+
+        ClearHover();
+
+        hoveredTile = best;
+        hoveredRenderer = bestR;
+        hoveredPrevMat = hoveredRenderer.sharedMaterial;
+
+        hoveredRenderer.sharedMaterial = hoverSelectedMat;
+    }
+
+    void ClearHover()
+    {
+        if (hoveredRenderer != null)
+            hoveredRenderer.sharedMaterial = hoveredPrevMat;
+
+        hoveredTile = null;
+        hoveredRenderer = null;
+        hoveredPrevMat = null;
     }
 
     void HandleClick()
@@ -110,6 +186,7 @@ public class Player : MonoBehaviour
                 {
                     mapGen.TravelToNeighborChunk(exits[e].side, exits[e].exitX, exits[e].exitZ);
                     DestroyExits();
+                    ClearHover();
                     ClearHighlights();
                     return;
                 }
@@ -124,6 +201,7 @@ public class Player : MonoBehaviour
             if (flattenWhenBlockingCamera)
                 FlattenTilesBlockingCamera();
 
+            ClearHover();
             ClearHighlights();
             HighlightMovable();
             UpdateExitTiles();
@@ -193,14 +271,18 @@ public class Player : MonoBehaviour
 
             if (!isBlockingMat) continue;
 
-            Vector3 s = t.localScale;
-            if (s.y <= flatHeight + 0.0001f) continue;
+            float currentWorldHeight = t.lossyScale.y;
+            if (currentWorldHeight <= flatHeight + 0.0001f) continue;
 
-            s.y = flatHeight;
+            Vector3 s = t.localScale;
+            if (s.y <= 0.0001f) continue;
+
+            float worldToLocalY = s.y / currentWorldHeight;
+            s.y = flatHeight * worldToLocalY;
             t.localScale = s;
 
             Vector3 lp = t.localPosition;
-            lp.y = flatHeight * 0.5f;
+            lp.y = (t.localScale.y * 0.5f);
             t.localPosition = lp;
 
             flattened++;
@@ -359,6 +441,8 @@ public class Player : MonoBehaviour
 
     void ClearHighlights()
     {
+        ClearHover();
+
         foreach (var kvp in originalMats)
         {
             if (kvp.Key != null)

@@ -37,6 +37,7 @@ public class MapGenerator : MonoBehaviour
     [Header("Player Settings")]
     public Material playerMat;
     public Material highlightBlueMat;
+    public Material hoverSelectedMat;
     [Range(1, 20)]
     public int playerMoveRange = 3;
     public bool allowDiagonalMovement = true;
@@ -247,6 +248,7 @@ public class MapGenerator : MonoBehaviour
         p.mapGen = this;
         p.cam = Camera.main;
         p.highlightBlueMat = highlightBlueMat;
+        p.hoverSelectedMat = hoverSelectedMat;
         p.moveRange = playerMoveRange;
         p.allowDiagonal = allowDiagonalMovement;
 
