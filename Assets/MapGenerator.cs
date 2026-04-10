@@ -36,6 +36,14 @@ public class MapGenerator : MonoBehaviour
     [Range(0f, 1f)]
     public float plainsTreeChance = 0.035f;
 
+    [Header("Forest")]
+    public GameObject forestTreePrefab;
+    public float forestTreeNoiseScale = 5f;
+    [Range(0f, 1f)]
+    public float forestTreeThreshold = 0.58f;
+    [Range(0f, 1f)]
+    public float forestPathThreshold = 0.47f;
+
     [Header("Desert Ground Variants")]
     public Material desertMatA;
     public Material desertMatB;
@@ -75,7 +83,7 @@ public class MapGenerator : MonoBehaviour
     public bool doGen;
 
     public enum EntryDirection { North, South, East, West }
-    public enum BiomeType { Mountains, Plains, Desert }
+    public enum BiomeType { Mountains, Plains, Desert, Forest }
 
     private GameObject playerObj;
 
@@ -83,15 +91,17 @@ public class MapGenerator : MonoBehaviour
     private bool[,] isGreen;
 
     private Vector2Int currentChunk = Vector2Int.zero;
-    private BiomeType currentBiome = BiomeType.Mountains;
+    private BiomeType currentBiome = BiomeType.Plains;
 
     private int walkableLayer = -1;
     private int blockedLayer = -1;
+    private int ignoreRaycastLayer = -1;
 
     void Awake()
     {
         walkableLayer = LayerMask.NameToLayer(walkableLayerName);
         blockedLayer = LayerMask.NameToLayer(blockedLayerName);
+        ignoreRaycastLayer = LayerMask.NameToLayer("Ignore Raycast");
     }
 
     void Start()
@@ -160,12 +170,17 @@ public class MapGenerator : MonoBehaviour
     BiomeType GetBiomeForChunk(Vector2Int chunkCoord, int chunkSeed)
     {
         if (chunkCoord == Vector2Int.zero)
-            return BiomeType.Mountains;
+        {
+            int startPick = Mathf.Abs(worldSeed) % 2;
+            return startPick == 0 ? BiomeType.Plains : BiomeType.Forest;
+        }
 
-        int v = Mathf.Abs(chunkSeed % 3);
+        int h = Mathf.Abs(chunkSeed);
+        int v = h % 4;
 
-        if (v == 0) return BiomeType.Mountains;
+        if (v == 0) return BiomeType.Forest;
         if (v == 1) return BiomeType.Plains;
+        if (v == 2) return BiomeType.Mountains;
         return BiomeType.Desert;
     }
 
@@ -212,8 +227,10 @@ public class MapGenerator : MonoBehaviour
                     GenerateMountainTile(x, z, xPos, zPos, tileSizeWorld, offsetX, offsetZ);
                 else if (biome == BiomeType.Plains)
                     GeneratePlainsTile(x, z, xPos, zPos, tileSizeWorld, offsetX, offsetZ, seed);
-                else
+                else if (biome == BiomeType.Desert)
                     GenerateDesertTile(x, z, xPos, zPos, tileSizeWorld, offsetX, offsetZ, seed);
+                else
+                    GenerateForestTile(x, z, xPos, zPos, tileSizeWorld, offsetX, offsetZ, seed);
             }
         }
 
@@ -255,14 +272,15 @@ public class MapGenerator : MonoBehaviour
         if (blocked)
         {
             if (blockedLayer != -1) cube.layer = blockedLayer;
+            isGreen[x, z] = false;
         }
         else
         {
             if (walkableLayer != -1) cube.layer = walkableLayer;
+            isGreen[x, z] = true;
         }
 
         tiles[x, z] = cube.transform;
-        isGreen[x, z] = picked == greenMatA || picked == greenMatB || picked == greenMatC;
     }
 
     void GeneratePlainsTile(int x, int z, float xPos, float zPos, float tileSizeWorld, float offsetX, float offsetZ, int seed)
@@ -296,8 +314,12 @@ public class MapGenerator : MonoBehaviour
             (z * 0.31f) + seed * 0.00047f
         );
 
-        if (plainsTreePrefab != null && treeNoise > 1f - plainsTreeChance)
+        bool spawnTree = plainsTreePrefab != null && treeNoise > 1f - plainsTreeChance;
+        if (spawnTree)
+        {
             CreatePropOnTile(plainsTreePrefab, cube.transform);
+            MarkTileBlocked(x, z);
+        }
     }
 
     void GenerateDesertTile(int x, int z, float xPos, float zPos, float tileSizeWorld, float offsetX, float offsetZ, int seed)
@@ -335,6 +357,58 @@ public class MapGenerator : MonoBehaviour
             CreatePropOnTile(cactusPrefab, cube.transform);
     }
 
+    void GenerateForestTile(int x, int z, float xPos, float zPos, float tileSizeWorld, float offsetX, float offsetZ, int seed)
+    {
+        float groundNoise = Mathf.PerlinNoise(
+            (x / noiseScale) + offsetX,
+            (z / noiseScale) + offsetZ
+        );
+
+        float totalHeight = tileSizeWorld;
+
+        GameObject cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
+
+        Material picked = PickForestGroundMaterial(groundNoise);
+        Renderer rend = cube.GetComponent<Renderer>();
+        if (rend != null)
+            rend.sharedMaterial = picked != null ? picked : baseMat;
+
+        cube.transform.SetParent(transform, false);
+        cube.transform.localScale = new Vector3(tileSizeWorld, totalHeight, tileSizeWorld);
+        cube.transform.localPosition = new Vector3(xPos, totalHeight * 0.5f, zPos);
+        cube.name = $"Tile_{x}_{z}";
+
+        if (walkableLayer != -1) cube.layer = walkableLayer;
+
+        tiles[x, z] = cube.transform;
+        isGreen[x, z] = true;
+
+        float forestNoise = Mathf.PerlinNoise(
+            (x / forestTreeNoiseScale) + seed * 0.00021f,
+            (z / forestTreeNoiseScale) + seed * 0.00037f
+        );
+
+        bool isOpenPath = forestNoise < forestPathThreshold;
+        bool spawnTree = forestNoise > forestTreeThreshold;
+
+        if (!isOpenPath && spawnTree && forestTreePrefab != null)
+        {
+            CreatePropOnTile(forestTreePrefab, cube.transform);
+            MarkTileBlocked(x, z);
+        }
+    }
+
+    void MarkTileBlocked(int x, int z)
+    {
+        if (x < 0 || z < 0 || x >= tileCount || z >= tileCount) return;
+        if (tiles == null || tiles[x, z] == null) return;
+
+        if (blockedLayer != -1)
+            tiles[x, z].gameObject.layer = blockedLayer;
+
+        isGreen[x, z] = false;
+    }
+
     void CreatePropOnTile(GameObject prefab, Transform tile)
     {
         GameObject obj = Instantiate(prefab, transform);
@@ -349,6 +423,21 @@ public class MapGenerator : MonoBehaviour
         );
 
         obj.transform.localRotation = Quaternion.identity;
+
+        Collider[] cols = obj.GetComponentsInChildren<Collider>(true);
+        for (int i = 0; i < cols.Length; i++)
+            cols[i].enabled = false;
+
+        if (ignoreRaycastLayer != -1)
+            SetLayerRecursively(obj, ignoreRaycastLayer);
+    }
+
+    void SetLayerRecursively(GameObject obj, int layer)
+    {
+        obj.layer = layer;
+
+        for (int i = 0; i < obj.transform.childCount; i++)
+            SetLayerRecursively(obj.transform.GetChild(i).gameObject, layer);
     }
 
     void EnsurePlayerExistsAndHooked()
@@ -398,7 +487,8 @@ public class MapGenerator : MonoBehaviour
 
         if (candidates.Count == 0) return;
 
-        Vector2Int chosen = candidates[Random.Range(0, candidates.Count)];
+        int pick = Mathf.Abs(GetChunkSeed(currentChunk.x, currentChunk.y) + 17) % candidates.Count;
+        Vector2Int chosen = candidates[pick];
         PlacePlayerOnTile(tiles[chosen.x, chosen.y]);
     }
 
@@ -545,6 +635,16 @@ public class MapGenerator : MonoBehaviour
     }
 
     Material PickPlainsGroundMaterial(float noise01)
+    {
+        int idx = Mathf.FloorToInt(noise01 * 3f);
+        if (idx > 2) idx = 2;
+
+        if (idx == 0) return greenMatA;
+        if (idx == 1) return greenMatB;
+        return greenMatC;
+    }
+
+    Material PickForestGroundMaterial(float noise01)
     {
         int idx = Mathf.FloorToInt(noise01 * 3f);
         if (idx > 2) idx = 2;

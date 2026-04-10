@@ -282,7 +282,7 @@ public class Player : MonoBehaviour
             t.localScale = s;
 
             Vector3 lp = t.localPosition;
-            lp.y = (t.localScale.y * 0.5f);
+            lp.y = t.localScale.y * 0.5f;
             t.localPosition = lp;
 
             flattened++;
@@ -308,7 +308,7 @@ public class Player : MonoBehaviour
             if (!TryParseTileCoords(tile.name, out int tx, out int tz))
                 continue;
 
-            if (!IsGreenTile(tile))
+            if (!IsWalkableTile(tile))
                 continue;
 
             int dx = Mathf.Abs(tx - cx);
@@ -408,18 +408,16 @@ public class Player : MonoBehaviour
         return null;
     }
 
-    bool IsGreenTile(Transform tile)
+    bool IsWalkableTile(Transform tile)
     {
-        Renderer r = tile.GetComponent<Renderer>();
-        if (r == null) return false;
-
-        Material m = r.sharedMaterial;
-        return m == mapGen.greenMatA || m == mapGen.greenMatB || m == mapGen.greenMatC;
+        if (tile == null) return false;
+        return tile.gameObject.layer == LayerMask.NameToLayer(mapGen.walkableLayerName);
     }
 
     bool TryParseTileCoords(string name, out int x, out int z)
     {
-        x = 0; z = 0;
+        x = 0;
+        z = 0;
 
         if (!name.StartsWith("Tile_")) return false;
 
@@ -448,6 +446,7 @@ public class Player : MonoBehaviour
             if (kvp.Key != null)
                 kvp.Key.sharedMaterial = kvp.Value;
         }
+
         originalMats.Clear();
         highlightedTiles.Clear();
     }
