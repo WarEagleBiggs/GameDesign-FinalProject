@@ -346,6 +346,14 @@ MonoBehaviour:
   brownMat: {fileID: 2100000, guid: b3c384e33c1e11341a83f9a1a1683f10, type: 2}
   greyMat: {fileID: 2100000, guid: 25c884d39148c96428675a29db6073d7, type: 2}
   whiteMat: {fileID: 2100000, guid: 57b57926e3c89c442ba1a5f51c5c1086, type: 2}
+  plainsTreePrefab: {fileID: 5457683648971704732, guid: 3c7fe682df8b47548b344987fd608565,
+    type: 3}
+  plainsTreeChance: 0.035
+  desertMatA: {fileID: 2100000, guid: dbabd98398a95084382e525792621625, type: 2}
+  desertMatB: {fileID: 2100000, guid: 26ea6c1aa99bc0f45a601b18d97595ac, type: 2}
+  desertMatC: {fileID: 2100000, guid: 83ddafd7aba9b5d488465b624f25d81c, type: 2}
+  cactusPrefab: {fileID: 0}
+  desertCactusChance: 0.03
   blockedRedMat: {fileID: 0}
   playerMat: {fileID: 2100000, guid: 3573200818b07df47812df722d2545dc, type: 2}
   highlightBlueMat: {fileID: 2100000, guid: a492922b57e1ffe4daeab992b1ed29bb, type: 2}

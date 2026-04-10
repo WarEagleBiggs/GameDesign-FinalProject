@@ -21,15 +21,30 @@ public class MapGenerator : MonoBehaviour
     [Header("Materials")]
     public Material baseMat;
 
-    [Header("Ground Variants")]
+    [Header("Mountains Ground Variants")]
     public Material greenMatA;
     public Material greenMatB;
     public Material greenMatC;
 
-    [Header("Elevation Materials")]
+    [Header("Mountain Elevation Materials")]
     public Material brownMat;
     public Material greyMat;
     public Material whiteMat;
+
+    [Header("Plains")]
+    public GameObject plainsTreePrefab;
+    [Range(0f, 1f)]
+    public float plainsTreeChance = 0.035f;
+
+    [Header("Desert Ground Variants")]
+    public Material desertMatA;
+    public Material desertMatB;
+    public Material desertMatC;
+
+    [Header("Desert")]
+    public GameObject cactusPrefab;
+    [Range(0f, 1f)]
+    public float desertCactusChance = 0.03f;
 
     [Header("Debug Materials")]
     public Material blockedRedMat;
@@ -60,6 +75,7 @@ public class MapGenerator : MonoBehaviour
     public bool doGen;
 
     public enum EntryDirection { North, South, East, West }
+    public enum BiomeType { Mountains, Plains, Desert }
 
     private GameObject playerObj;
 
@@ -67,6 +83,7 @@ public class MapGenerator : MonoBehaviour
     private bool[,] isGreen;
 
     private Vector2Int currentChunk = Vector2Int.zero;
+    private BiomeType currentBiome = BiomeType.Mountains;
 
     private int walkableLayer = -1;
     private int blockedLayer = -1;
@@ -79,8 +96,8 @@ public class MapGenerator : MonoBehaviour
 
     void Start()
     {
-        UpdateChunkUI();
         LoadChunk(currentChunk, null, null);
+        UpdateChunkUI();
         ApplyCameraTargetIfEnabled();
     }
 
@@ -89,8 +106,8 @@ public class MapGenerator : MonoBehaviour
         if (doGen)
         {
             doGen = false;
-            UpdateChunkUI();
             LoadChunk(currentChunk, null, null);
+            UpdateChunkUI();
             ApplyCameraTargetIfEnabled();
         }
     }
@@ -98,7 +115,7 @@ public class MapGenerator : MonoBehaviour
     void UpdateChunkUI()
     {
         if (chunkText != null)
-            chunkText.SetText($"CHUNK: {currentChunk.x}, {currentChunk.y}");
+            chunkText.SetText($"CHUNK: {currentChunk.x}, {currentChunk.y}\nBIOME: {currentBiome}");
     }
 
     public void TravelToNeighborChunk(EntryDirection exitSide, int exitX, int exitZ)
@@ -108,13 +125,11 @@ public class MapGenerator : MonoBehaviour
         if (exitSide == EntryDirection.South) currentChunk += new Vector2Int(0, -1);
         if (exitSide == EntryDirection.North) currentChunk += new Vector2Int(0, 1);
 
-        UpdateChunkUI();
-
         EntryDirection entrySide =
             exitSide == EntryDirection.West ? EntryDirection.East :
             exitSide == EntryDirection.East ? EntryDirection.West :
             exitSide == EntryDirection.South ? EntryDirection.North :
-                                               EntryDirection.South;
+                                              EntryDirection.South;
 
         int entryX = exitX;
         int entryZ = exitZ;
@@ -125,18 +140,33 @@ public class MapGenerator : MonoBehaviour
         if (exitSide == EntryDirection.South) entryZ = tileCount - 1;
 
         LoadChunk(currentChunk, entrySide, new Vector2Int(entryX, entryZ));
+        UpdateChunkUI();
         ApplyCameraTargetIfEnabled();
     }
 
     void LoadChunk(Vector2Int chunkCoord, EntryDirection? entrySide, Vector2Int? desiredEntry)
     {
         int chunkSeed = GetChunkSeed(chunkCoord.x, chunkCoord.y);
-        GenerateWithSeed(chunkSeed);
+        currentBiome = GetBiomeForChunk(chunkCoord, chunkSeed);
+
+        GenerateWithSeed(chunkCoord, chunkSeed, currentBiome);
 
         if (desiredEntry.HasValue && entrySide.HasValue)
             SpawnPlayerAtDesiredOrEdgeFallback(desiredEntry.Value, entrySide.Value);
         else
             SpawnPlayerOnSafeGreenCell();
+    }
+
+    BiomeType GetBiomeForChunk(Vector2Int chunkCoord, int chunkSeed)
+    {
+        if (chunkCoord == Vector2Int.zero)
+            return BiomeType.Mountains;
+
+        int v = Mathf.Abs(chunkSeed % 3);
+
+        if (v == 0) return BiomeType.Mountains;
+        if (v == 1) return BiomeType.Plains;
+        return BiomeType.Desert;
     }
 
     int GetChunkSeed(int chunkX, int chunkZ)
@@ -153,7 +183,7 @@ public class MapGenerator : MonoBehaviour
         }
     }
 
-    void GenerateWithSeed(int seed)
+    void GenerateWithSeed(Vector2Int chunkCoord, int seed, BiomeType biome)
     {
         for (int i = transform.childCount - 1; i >= 0; i--)
         {
@@ -178,51 +208,147 @@ public class MapGenerator : MonoBehaviour
                 float xPos = -half + tileSizeWorld * 0.5f + x * tileSizeWorld;
                 float zPos = -half + tileSizeWorld * 0.5f + z * tileSizeWorld;
 
-                float noise = Mathf.PerlinNoise(
-                    (x / noiseScale) + offsetX,
-                    (z / noiseScale) + offsetZ
-                );
-
-                float extraHeight = 0f;
-                float normalizedHeight = 0f;
-
-                bool isBlocked = noise >= wallThreshold;
-
-                if (isBlocked)
-                {
-                    normalizedHeight = (noise - wallThreshold) / (1f - wallThreshold);
-                    extraHeight = normalizedHeight * heightMultiplier;
-                }
-
-                float totalHeight = tileSizeWorld + extraHeight;
-
-                GameObject cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
-
-                Material picked = PickMaterial(normalizedHeight, noise);
-                Renderer rend = cube.GetComponent<Renderer>();
-                if (rend != null)
-                    rend.sharedMaterial = picked != null ? picked : baseMat;
-
-                cube.transform.SetParent(transform, false);
-                cube.transform.localScale = new Vector3(tileSizeWorld, totalHeight, tileSizeWorld);
-                cube.transform.localPosition = new Vector3(xPos, totalHeight * 0.5f, zPos);
-                cube.name = $"Tile_{x}_{z}";
-
-                if (isBlocked)
-                {
-                    if (blockedLayer != -1) cube.layer = blockedLayer;
-                }
+                if (biome == BiomeType.Mountains)
+                    GenerateMountainTile(x, z, xPos, zPos, tileSizeWorld, offsetX, offsetZ);
+                else if (biome == BiomeType.Plains)
+                    GeneratePlainsTile(x, z, xPos, zPos, tileSizeWorld, offsetX, offsetZ, seed);
                 else
-                {
-                    if (walkableLayer != -1) cube.layer = walkableLayer;
-                }
-
-                tiles[x, z] = cube.transform;
-                isGreen[x, z] = picked == greenMatA || picked == greenMatB || picked == greenMatC;
+                    GenerateDesertTile(x, z, xPos, zPos, tileSizeWorld, offsetX, offsetZ, seed);
             }
         }
 
         EnsurePlayerExistsAndHooked();
+    }
+
+    void GenerateMountainTile(int x, int z, float xPos, float zPos, float tileSizeWorld, float offsetX, float offsetZ)
+    {
+        float noise = Mathf.PerlinNoise(
+            (x / noiseScale) + offsetX,
+            (z / noiseScale) + offsetZ
+        );
+
+        float extraHeight = 0f;
+        float normalizedHeight = 0f;
+
+        bool blocked = noise >= wallThreshold;
+
+        if (blocked)
+        {
+            normalizedHeight = (noise - wallThreshold) / (1f - wallThreshold);
+            extraHeight = normalizedHeight * heightMultiplier;
+        }
+
+        float totalHeight = tileSizeWorld + extraHeight;
+
+        GameObject cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
+
+        Material picked = PickMountainMaterial(normalizedHeight, noise);
+        Renderer rend = cube.GetComponent<Renderer>();
+        if (rend != null)
+            rend.sharedMaterial = picked != null ? picked : baseMat;
+
+        cube.transform.SetParent(transform, false);
+        cube.transform.localScale = new Vector3(tileSizeWorld, totalHeight, tileSizeWorld);
+        cube.transform.localPosition = new Vector3(xPos, totalHeight * 0.5f, zPos);
+        cube.name = $"Tile_{x}_{z}";
+
+        if (blocked)
+        {
+            if (blockedLayer != -1) cube.layer = blockedLayer;
+        }
+        else
+        {
+            if (walkableLayer != -1) cube.layer = walkableLayer;
+        }
+
+        tiles[x, z] = cube.transform;
+        isGreen[x, z] = picked == greenMatA || picked == greenMatB || picked == greenMatC;
+    }
+
+    void GeneratePlainsTile(int x, int z, float xPos, float zPos, float tileSizeWorld, float offsetX, float offsetZ, int seed)
+    {
+        float groundNoise = Mathf.PerlinNoise(
+            (x / noiseScale) + offsetX,
+            (z / noiseScale) + offsetZ
+        );
+
+        float totalHeight = tileSizeWorld;
+
+        GameObject cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
+
+        Material picked = PickPlainsGroundMaterial(groundNoise);
+        Renderer rend = cube.GetComponent<Renderer>();
+        if (rend != null)
+            rend.sharedMaterial = picked != null ? picked : baseMat;
+
+        cube.transform.SetParent(transform, false);
+        cube.transform.localScale = new Vector3(tileSizeWorld, totalHeight, tileSizeWorld);
+        cube.transform.localPosition = new Vector3(xPos, totalHeight * 0.5f, zPos);
+        cube.name = $"Tile_{x}_{z}";
+
+        if (walkableLayer != -1) cube.layer = walkableLayer;
+
+        tiles[x, z] = cube.transform;
+        isGreen[x, z] = true;
+
+        float treeNoise = Mathf.PerlinNoise(
+            (x * 0.31f) + seed * 0.00031f,
+            (z * 0.31f) + seed * 0.00047f
+        );
+
+        if (plainsTreePrefab != null && treeNoise > 1f - plainsTreeChance)
+            CreatePropOnTile(plainsTreePrefab, cube.transform);
+    }
+
+    void GenerateDesertTile(int x, int z, float xPos, float zPos, float tileSizeWorld, float offsetX, float offsetZ, int seed)
+    {
+        float groundNoise = Mathf.PerlinNoise(
+            (x / noiseScale) + offsetX,
+            (z / noiseScale) + offsetZ
+        );
+
+        float totalHeight = tileSizeWorld;
+
+        GameObject cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
+
+        Material picked = PickDesertGroundMaterial(groundNoise);
+        Renderer rend = cube.GetComponent<Renderer>();
+        if (rend != null)
+            rend.sharedMaterial = picked != null ? picked : baseMat;
+
+        cube.transform.SetParent(transform, false);
+        cube.transform.localScale = new Vector3(tileSizeWorld, totalHeight, tileSizeWorld);
+        cube.transform.localPosition = new Vector3(xPos, totalHeight * 0.5f, zPos);
+        cube.name = $"Tile_{x}_{z}";
+
+        if (walkableLayer != -1) cube.layer = walkableLayer;
+
+        tiles[x, z] = cube.transform;
+        isGreen[x, z] = true;
+
+        float cactusNoise = Mathf.PerlinNoise(
+            (x * 0.29f) + seed * 0.00061f,
+            (z * 0.29f) + seed * 0.00079f
+        );
+
+        if (cactusPrefab != null && cactusNoise > 1f - desertCactusChance)
+            CreatePropOnTile(cactusPrefab, cube.transform);
+    }
+
+    void CreatePropOnTile(GameObject prefab, Transform tile)
+    {
+        GameObject obj = Instantiate(prefab, transform);
+        obj.name = prefab.name;
+
+        float tileTopY = tile.localPosition.y + (tile.localScale.y * 0.5f);
+
+        obj.transform.localPosition = new Vector3(
+            tile.localPosition.x,
+            tileTopY,
+            tile.localPosition.z
+        );
+
+        obj.transform.localRotation = Quaternion.identity;
     }
 
     void EnsurePlayerExistsAndHooked()
@@ -400,7 +526,7 @@ public class MapGenerator : MonoBehaviour
         cameraOrbit.target = playerObj.transform;
     }
 
-    Material PickMaterial(float normalizedHeight, float noise01)
+    Material PickMountainMaterial(float normalizedHeight, float noise01)
     {
         if (normalizedHeight <= 0f)
         {
@@ -416,5 +542,25 @@ public class MapGenerator : MonoBehaviour
         if (normalizedHeight < 0.33f) return brownMat;
         if (normalizedHeight < 0.66f) return greyMat;
         return whiteMat;
+    }
+
+    Material PickPlainsGroundMaterial(float noise01)
+    {
+        int idx = Mathf.FloorToInt(noise01 * 3f);
+        if (idx > 2) idx = 2;
+
+        if (idx == 0) return greenMatA;
+        if (idx == 1) return greenMatB;
+        return greenMatC;
+    }
+
+    Material PickDesertGroundMaterial(float noise01)
+    {
+        int idx = Mathf.FloorToInt(noise01 * 3f);
+        if (idx > 2) idx = 2;
+
+        if (idx == 0) return desertMatA;
+        if (idx == 1) return desertMatB;
+        return desertMatC;
     }
 }
