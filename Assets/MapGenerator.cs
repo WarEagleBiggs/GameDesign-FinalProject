@@ -54,6 +54,12 @@ public class MapGenerator : MonoBehaviour
     [Range(0f, 1f)]
     public float desertCactusChance = 0.03f;
 
+    [Header("Neighbor Preview")]
+    public bool showNeighborPreviews = true;
+    [Range(0.05f, 1f)]
+    public float previewAlpha = 0.35f;
+    public float previewVerticalOffset = 0f;
+
     [Header("Debug Materials")]
     public Material blockedRedMat;
 
@@ -86,6 +92,7 @@ public class MapGenerator : MonoBehaviour
     public enum BiomeType { Mountains, Plains, Desert, Forest }
 
     private GameObject playerObj;
+    private Transform previewRoot;
 
     private Transform[,] tiles;
     private bool[,] isGreen;
@@ -97,11 +104,14 @@ public class MapGenerator : MonoBehaviour
     private int blockedLayer = -1;
     private int ignoreRaycastLayer = -1;
 
+    private readonly Dictionary<Material, Material> previewMaterialCache = new Dictionary<Material, Material>();
+
     void Awake()
     {
         walkableLayer = LayerMask.NameToLayer(walkableLayerName);
         blockedLayer = LayerMask.NameToLayer(blockedLayerName);
         ignoreRaycastLayer = LayerMask.NameToLayer("Ignore Raycast");
+        EnsurePreviewRoot();
     }
 
     void Start()
@@ -120,6 +130,35 @@ public class MapGenerator : MonoBehaviour
             UpdateChunkUI();
             ApplyCameraTargetIfEnabled();
         }
+    }
+
+    void EnsurePreviewRoot()
+    {
+        if (previewRoot != null) return;
+
+        Transform found = transform.Find("PreviewRoot");
+        if (found != null)
+        {
+            previewRoot = found;
+            return;
+        }
+
+        GameObject go = new GameObject("PreviewRoot");
+        go.transform.SetParent(transform, false);
+        previewRoot = go.transform;
+    }
+
+    void ClearPreviewRoot()
+    {
+        EnsurePreviewRoot();
+
+        for (int i = previewRoot.childCount - 1; i >= 0; i--)
+            Destroy(previewRoot.GetChild(i).gameObject);
+
+        foreach (var kvp in previewMaterialCache)
+            if (kvp.Value != null) Destroy(kvp.Value);
+
+        previewMaterialCache.Clear();
     }
 
     void UpdateChunkUI()
@@ -165,6 +204,8 @@ public class MapGenerator : MonoBehaviour
             SpawnPlayerAtDesiredOrEdgeFallback(desiredEntry.Value, entrySide.Value);
         else
             SpawnPlayerOnSafeGreenCell();
+
+        GenerateNeighborPreviews();
     }
 
     BiomeType GetBiomeForChunk(Vector2Int chunkCoord, int chunkSeed)
@@ -200,10 +241,13 @@ public class MapGenerator : MonoBehaviour
 
     void GenerateWithSeed(Vector2Int chunkCoord, int seed, BiomeType biome)
     {
+        EnsurePreviewRoot();
+
         for (int i = transform.childCount - 1; i >= 0; i--)
         {
             Transform c = transform.GetChild(i);
             if (playerObj != null && c.gameObject == playerObj) continue;
+            if (previewRoot != null && c == previewRoot) continue;
             Destroy(c.gameObject);
         }
 
@@ -237,12 +281,60 @@ public class MapGenerator : MonoBehaviour
         EnsurePlayerExistsAndHooked();
     }
 
+    void GenerateNeighborPreviews()
+    {
+        ClearPreviewRoot();
+
+        if (!showNeighborPreviews) return;
+
+        GeneratePreviewChunk(currentChunk + new Vector2Int(-1, 0), new Vector3(-mapSize, previewVerticalOffset, 0f));
+        GeneratePreviewChunk(currentChunk + new Vector2Int(1, 0), new Vector3(mapSize, previewVerticalOffset, 0f));
+        GeneratePreviewChunk(currentChunk + new Vector2Int(0, 1), new Vector3(0f, previewVerticalOffset, mapSize));
+        GeneratePreviewChunk(currentChunk + new Vector2Int(0, -1), new Vector3(0f, previewVerticalOffset, -mapSize));
+
+        GeneratePreviewChunk(currentChunk + new Vector2Int(-1, 1), new Vector3(-mapSize, previewVerticalOffset, mapSize));
+        GeneratePreviewChunk(currentChunk + new Vector2Int(1, 1), new Vector3(mapSize, previewVerticalOffset, mapSize));
+        GeneratePreviewChunk(currentChunk + new Vector2Int(-1, -1), new Vector3(-mapSize, previewVerticalOffset, -mapSize));
+        GeneratePreviewChunk(currentChunk + new Vector2Int(1, -1), new Vector3(mapSize, previewVerticalOffset, -mapSize));
+    }
+
+    void GeneratePreviewChunk(Vector2Int chunkCoord, Vector3 chunkOffset)
+    {
+        int seed = GetChunkSeed(chunkCoord.x, chunkCoord.y);
+        BiomeType biome = GetBiomeForChunk(chunkCoord, seed);
+
+        GameObject chunkObj = new GameObject($"PreviewChunk_{chunkCoord.x}_{chunkCoord.y}_{biome}");
+        chunkObj.transform.SetParent(previewRoot, false);
+        chunkObj.transform.localPosition = chunkOffset;
+
+        float tileSizeWorld = mapSize / tileCount;
+        float half = mapSize * 0.5f;
+
+        float offsetX = seed * 0.0001f;
+        float offsetZ = seed * 0.00013f;
+
+        for (int x = 0; x < tileCount; x++)
+        {
+            for (int z = 0; z < tileCount; z++)
+            {
+                float xPos = -half + tileSizeWorld * 0.5f + x * tileSizeWorld;
+                float zPos = -half + tileSizeWorld * 0.5f + z * tileSizeWorld;
+
+                if (biome == BiomeType.Mountains)
+                    GeneratePreviewMountainTile(chunkObj.transform, x, z, xPos, zPos, tileSizeWorld, offsetX, offsetZ);
+                else if (biome == BiomeType.Plains)
+                    GeneratePreviewPlainsTile(chunkObj.transform, x, z, xPos, zPos, tileSizeWorld, offsetX, offsetZ, seed);
+                else if (biome == BiomeType.Desert)
+                    GeneratePreviewDesertTile(chunkObj.transform, x, z, xPos, zPos, tileSizeWorld, offsetX, offsetZ, seed);
+                else
+                    GeneratePreviewForestTile(chunkObj.transform, x, z, xPos, zPos, tileSizeWorld, offsetX, offsetZ, seed);
+            }
+        }
+    }
+
     void GenerateMountainTile(int x, int z, float xPos, float zPos, float tileSizeWorld, float offsetX, float offsetZ)
     {
-        float noise = Mathf.PerlinNoise(
-            (x / noiseScale) + offsetX,
-            (z / noiseScale) + offsetZ
-        );
+        float noise = Mathf.PerlinNoise((x / noiseScale) + offsetX, (z / noiseScale) + offsetZ);
 
         float extraHeight = 0f;
         float normalizedHeight = 0f;
@@ -285,11 +377,7 @@ public class MapGenerator : MonoBehaviour
 
     void GeneratePlainsTile(int x, int z, float xPos, float zPos, float tileSizeWorld, float offsetX, float offsetZ, int seed)
     {
-        float groundNoise = Mathf.PerlinNoise(
-            (x / noiseScale) + offsetX,
-            (z / noiseScale) + offsetZ
-        );
-
+        float groundNoise = Mathf.PerlinNoise((x / noiseScale) + offsetX, (z / noiseScale) + offsetZ);
         float totalHeight = tileSizeWorld;
 
         GameObject cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
@@ -309,10 +397,7 @@ public class MapGenerator : MonoBehaviour
         tiles[x, z] = cube.transform;
         isGreen[x, z] = true;
 
-        float treeNoise = Mathf.PerlinNoise(
-            (x * 0.31f) + seed * 0.00031f,
-            (z * 0.31f) + seed * 0.00047f
-        );
+        float treeNoise = Mathf.PerlinNoise((x * 0.31f) + seed * 0.00031f, (z * 0.31f) + seed * 0.00047f);
 
         bool spawnTree = plainsTreePrefab != null && treeNoise > 1f - plainsTreeChance;
         if (spawnTree)
@@ -324,11 +409,7 @@ public class MapGenerator : MonoBehaviour
 
     void GenerateDesertTile(int x, int z, float xPos, float zPos, float tileSizeWorld, float offsetX, float offsetZ, int seed)
     {
-        float groundNoise = Mathf.PerlinNoise(
-            (x / noiseScale) + offsetX,
-            (z / noiseScale) + offsetZ
-        );
-
+        float groundNoise = Mathf.PerlinNoise((x / noiseScale) + offsetX, (z / noiseScale) + offsetZ);
         float totalHeight = tileSizeWorld;
 
         GameObject cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
@@ -348,10 +429,7 @@ public class MapGenerator : MonoBehaviour
         tiles[x, z] = cube.transform;
         isGreen[x, z] = true;
 
-        float cactusNoise = Mathf.PerlinNoise(
-            (x * 0.29f) + seed * 0.00061f,
-            (z * 0.29f) + seed * 0.00079f
-        );
+        float cactusNoise = Mathf.PerlinNoise((x * 0.29f) + seed * 0.00061f, (z * 0.29f) + seed * 0.00079f);
 
         if (cactusPrefab != null && cactusNoise > 1f - desertCactusChance)
             CreatePropOnTile(cactusPrefab, cube.transform);
@@ -359,11 +437,7 @@ public class MapGenerator : MonoBehaviour
 
     void GenerateForestTile(int x, int z, float xPos, float zPos, float tileSizeWorld, float offsetX, float offsetZ, int seed)
     {
-        float groundNoise = Mathf.PerlinNoise(
-            (x / noiseScale) + offsetX,
-            (z / noiseScale) + offsetZ
-        );
-
+        float groundNoise = Mathf.PerlinNoise((x / noiseScale) + offsetX, (z / noiseScale) + offsetZ);
         float totalHeight = tileSizeWorld;
 
         GameObject cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
@@ -398,6 +472,111 @@ public class MapGenerator : MonoBehaviour
         }
     }
 
+    void GeneratePreviewMountainTile(Transform parent, int x, int z, float xPos, float zPos, float tileSizeWorld, float offsetX, float offsetZ)
+    {
+        float noise = Mathf.PerlinNoise((x / noiseScale) + offsetX, (z / noiseScale) + offsetZ);
+
+        float extraHeight = 0f;
+        float normalizedHeight = 0f;
+
+        bool blocked = noise >= wallThreshold;
+        if (blocked)
+        {
+            normalizedHeight = (noise - wallThreshold) / (1f - wallThreshold);
+            extraHeight = normalizedHeight * heightMultiplier;
+        }
+
+        float totalHeight = tileSizeWorld + extraHeight;
+
+        GameObject cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        Collider col = cube.GetComponent<Collider>();
+        if (col != null) Destroy(col);
+
+        Material picked = PickMountainMaterial(normalizedHeight, noise);
+        ApplyPreviewMaterial(cube, picked != null ? picked : baseMat);
+
+        cube.transform.SetParent(parent, false);
+        cube.transform.localScale = new Vector3(tileSizeWorld, totalHeight, tileSizeWorld);
+        cube.transform.localPosition = new Vector3(xPos, totalHeight * 0.5f, zPos);
+        cube.name = $"PreviewTile_{x}_{z}";
+        if (ignoreRaycastLayer != -1) cube.layer = ignoreRaycastLayer;
+    }
+
+    void GeneratePreviewPlainsTile(Transform parent, int x, int z, float xPos, float zPos, float tileSizeWorld, float offsetX, float offsetZ, int seed)
+    {
+        float groundNoise = Mathf.PerlinNoise((x / noiseScale) + offsetX, (z / noiseScale) + offsetZ);
+
+        GameObject cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        Collider col = cube.GetComponent<Collider>();
+        if (col != null) Destroy(col);
+
+        Material picked = PickPlainsGroundMaterial(groundNoise);
+        ApplyPreviewMaterial(cube, picked != null ? picked : baseMat);
+
+        cube.transform.SetParent(parent, false);
+        cube.transform.localScale = new Vector3(tileSizeWorld, tileSizeWorld, tileSizeWorld);
+        cube.transform.localPosition = new Vector3(xPos, tileSizeWorld * 0.5f, zPos);
+        cube.name = $"PreviewTile_{x}_{z}";
+        if (ignoreRaycastLayer != -1) cube.layer = ignoreRaycastLayer;
+
+        float treeNoise = Mathf.PerlinNoise((x * 0.31f) + seed * 0.00031f, (z * 0.31f) + seed * 0.00047f);
+        bool spawnTree = plainsTreePrefab != null && treeNoise > 1f - plainsTreeChance;
+        if (spawnTree)
+            CreatePreviewPropOnTile(parent, plainsTreePrefab, cube.transform);
+    }
+
+    void GeneratePreviewDesertTile(Transform parent, int x, int z, float xPos, float zPos, float tileSizeWorld, float offsetX, float offsetZ, int seed)
+    {
+        float groundNoise = Mathf.PerlinNoise((x / noiseScale) + offsetX, (z / noiseScale) + offsetZ);
+
+        GameObject cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        Collider col = cube.GetComponent<Collider>();
+        if (col != null) Destroy(col);
+
+        Material picked = PickDesertGroundMaterial(groundNoise);
+        ApplyPreviewMaterial(cube, picked != null ? picked : baseMat);
+
+        cube.transform.SetParent(parent, false);
+        cube.transform.localScale = new Vector3(tileSizeWorld, tileSizeWorld, tileSizeWorld);
+        cube.transform.localPosition = new Vector3(xPos, tileSizeWorld * 0.5f, zPos);
+        cube.name = $"PreviewTile_{x}_{z}";
+        if (ignoreRaycastLayer != -1) cube.layer = ignoreRaycastLayer;
+
+        float cactusNoise = Mathf.PerlinNoise((x * 0.29f) + seed * 0.00061f, (z * 0.29f) + seed * 0.00079f);
+        bool spawnCactus = cactusPrefab != null && cactusNoise > 1f - desertCactusChance;
+        if (spawnCactus)
+            CreatePreviewPropOnTile(parent, cactusPrefab, cube.transform);
+    }
+
+    void GeneratePreviewForestTile(Transform parent, int x, int z, float xPos, float zPos, float tileSizeWorld, float offsetX, float offsetZ, int seed)
+    {
+        float groundNoise = Mathf.PerlinNoise((x / noiseScale) + offsetX, (z / noiseScale) + offsetZ);
+
+        GameObject cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        Collider col = cube.GetComponent<Collider>();
+        if (col != null) Destroy(col);
+
+        Material picked = PickForestGroundMaterial(groundNoise);
+        ApplyPreviewMaterial(cube, picked != null ? picked : baseMat);
+
+        cube.transform.SetParent(parent, false);
+        cube.transform.localScale = new Vector3(tileSizeWorld, tileSizeWorld, tileSizeWorld);
+        cube.transform.localPosition = new Vector3(xPos, tileSizeWorld * 0.5f, zPos);
+        cube.name = $"PreviewTile_{x}_{z}";
+        if (ignoreRaycastLayer != -1) cube.layer = ignoreRaycastLayer;
+
+        float forestNoise = Mathf.PerlinNoise(
+            (x / forestTreeNoiseScale) + seed * 0.00021f,
+            (z / forestTreeNoiseScale) + seed * 0.00037f
+        );
+
+        bool isOpenPath = forestNoise < forestPathThreshold;
+        bool spawnTree = forestNoise > forestTreeThreshold;
+
+        if (!isOpenPath && spawnTree && forestTreePrefab != null)
+            CreatePreviewPropOnTile(parent, forestTreePrefab, cube.transform);
+    }
+
     void MarkTileBlocked(int x, int z)
     {
         if (x < 0 || z < 0 || x >= tileCount || z >= tileCount) return;
@@ -430,6 +609,101 @@ public class MapGenerator : MonoBehaviour
 
         if (ignoreRaycastLayer != -1)
             SetLayerRecursively(obj, ignoreRaycastLayer);
+    }
+
+    void CreatePreviewPropOnTile(Transform parent, GameObject prefab, Transform tile)
+    {
+        GameObject obj = Instantiate(prefab, parent);
+        obj.name = $"Preview_{prefab.name}";
+
+        float tileTopY = tile.localPosition.y + (tile.localScale.y * 0.5f);
+
+        obj.transform.localPosition = new Vector3(
+            tile.localPosition.x,
+            tileTopY,
+            tile.localPosition.z
+        );
+
+        obj.transform.localRotation = Quaternion.identity;
+
+        Collider[] cols = obj.GetComponentsInChildren<Collider>(true);
+        for (int i = 0; i < cols.Length; i++)
+            Destroy(cols[i]);
+
+        ApplyPreviewMaterialsRecursively(obj);
+
+        if (ignoreRaycastLayer != -1)
+            SetLayerRecursively(obj, ignoreRaycastLayer);
+    }
+
+    void ApplyPreviewMaterial(GameObject go, Material source)
+    {
+        Renderer r = go.GetComponent<Renderer>();
+        if (r == null) return;
+
+        r.sharedMaterial = GetPreviewMaterial(source);
+    }
+
+    void ApplyPreviewMaterialsRecursively(GameObject go)
+    {
+        Renderer[] renderers = go.GetComponentsInChildren<Renderer>(true);
+        for (int i = 0; i < renderers.Length; i++)
+        {
+            Material[] src = renderers[i].sharedMaterials;
+            Material[] dst = new Material[src.Length];
+
+            for (int m = 0; m < src.Length; m++)
+                dst[m] = GetPreviewMaterial(src[m]);
+
+            renderers[i].sharedMaterials = dst;
+        }
+    }
+
+    Material GetPreviewMaterial(Material source)
+    {
+        if (source == null) return null;
+        if (previewMaterialCache.TryGetValue(source, out Material cached)) return cached;
+
+        Material m = new Material(source);
+        MakeMaterialTransparent(m, previewAlpha);
+        previewMaterialCache[source] = m;
+        return m;
+    }
+
+    void MakeMaterialTransparent(Material m, float alpha)
+    {
+        if (m == null) return;
+
+        if (m.HasProperty("_BaseColor"))
+        {
+            Color c = m.GetColor("_BaseColor");
+            c.a = alpha;
+            m.SetColor("_BaseColor", c);
+        }
+
+        if (m.HasProperty("_Color"))
+        {
+            Color c = m.color;
+            c.a = alpha;
+            m.color = c;
+        }
+
+        if (m.HasProperty("_Surface"))
+            m.SetFloat("_Surface", 1f);
+
+        if (m.HasProperty("_Blend"))
+            m.SetFloat("_Blend", 0f);
+
+        if (m.HasProperty("_AlphaClip"))
+            m.SetFloat("_AlphaClip", 0f);
+
+        m.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
+        m.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+        m.SetFloat("_ZWrite", 0f);
+        m.DisableKeyword("_ALPHATEST_ON");
+        m.EnableKeyword("_ALPHABLEND_ON");
+        m.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+        m.renderQueue = 3000;
     }
 
     void SetLayerRecursively(GameObject obj, int layer)

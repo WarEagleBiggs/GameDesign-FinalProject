@@ -348,7 +348,7 @@ MonoBehaviour:
   whiteMat: {fileID: 2100000, guid: 57b57926e3c89c442ba1a5f51c5c1086, type: 2}
   plainsTreePrefab: {fileID: 5457683648971704732, guid: 3c7fe682df8b47548b344987fd608565,
     type: 3}
-  plainsTreeChance: 0.194
+  plainsTreeChance: 0.122
   forestTreePrefab: {fileID: 5457683648971704732, guid: 3c7fe682df8b47548b344987fd608565,
     type: 3}
   forestTreeNoiseScale: 5
@@ -359,6 +359,9 @@ MonoBehaviour:
   desertMatC: {fileID: 2100000, guid: 83ddafd7aba9b5d488465b624f25d81c, type: 2}
   cactusPrefab: {fileID: 0}
   desertCactusChance: 0.03
+  showNeighborPreviews: 1
+  previewAlpha: 0.35
+  previewVerticalOffset: 0
   blockedRedMat: {fileID: 0}
   playerMat: {fileID: 2100000, guid: 3573200818b07df47812df722d2545dc, type: 2}
   highlightBlueMat: {fileID: 2100000, guid: a492922b57e1ffe4daeab992b1ed29bb, type: 2}
