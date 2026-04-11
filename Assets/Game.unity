@@ -359,6 +359,17 @@ MonoBehaviour:
   desertMatC: {fileID: 2100000, guid: 83ddafd7aba9b5d488465b624f25d81c, type: 2}
   cactusPrefab: {fileID: 0}
   desertCactusChance: 0.03
+  cabinPrefab: {fileID: 771575662598802277, guid: 221366d30e3235642b92451ef7c95676,
+    type: 3}
+  towerPrefab: {fileID: 1917348307525763323, guid: dec507a08448e184892cb9320c387ff7,
+    type: 3}
+  chestPrefab: {fileID: 5805440832310495564, guid: c33d85a2389f7b54784c98e05c627d94,
+    type: 3}
+  chunkHasStructureChance: 0.505
+  chestWeight: 0.65
+  cabinWeight: 0.2
+  towerWeight: 0.15
+  maxStructureAttemptsPerChunk: 12
   showNeighborPreviews: 1
   previewAlpha: 0.35
   previewVerticalOffset: 0

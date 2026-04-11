@@ -54,6 +54,16 @@ public class MapGenerator : MonoBehaviour
     [Range(0f, 1f)]
     public float desertCactusChance = 0.03f;
 
+    [Header("Structures")]
+    public GameObject cabinPrefab;
+    public GameObject towerPrefab;
+    public GameObject chestPrefab;
+    [Range(0f, 1f)] public float chunkHasStructureChance = 0.35f;
+    [Range(0f, 1f)] public float chestWeight = 0.65f;
+    [Range(0f, 1f)] public float cabinWeight = 0.2f;
+    [Range(0f, 1f)] public float towerWeight = 0.15f;
+    [Range(1, 20)] public int maxStructureAttemptsPerChunk = 12;
+
     [Header("Neighbor Preview")]
     public bool showNeighborPreviews = true;
     [Range(0.05f, 1f)]
@@ -278,6 +288,7 @@ public class MapGenerator : MonoBehaviour
             }
         }
 
+        GenerateStructuresForChunk(seed);
         EnsurePlayerExistsAndHooked();
     }
 
@@ -338,7 +349,6 @@ public class MapGenerator : MonoBehaviour
 
         float extraHeight = 0f;
         float normalizedHeight = 0f;
-
         bool blocked = noise >= wallThreshold;
 
         if (blocked)
@@ -350,7 +360,6 @@ public class MapGenerator : MonoBehaviour
         float totalHeight = tileSizeWorld + extraHeight;
 
         GameObject cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
-
         Material picked = PickMountainMaterial(normalizedHeight, noise);
         Renderer rend = cube.GetComponent<Renderer>();
         if (rend != null)
@@ -381,7 +390,6 @@ public class MapGenerator : MonoBehaviour
         float totalHeight = tileSizeWorld;
 
         GameObject cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
-
         Material picked = PickPlainsGroundMaterial(groundNoise);
         Renderer rend = cube.GetComponent<Renderer>();
         if (rend != null)
@@ -413,7 +421,6 @@ public class MapGenerator : MonoBehaviour
         float totalHeight = tileSizeWorld;
 
         GameObject cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
-
         Material picked = PickDesertGroundMaterial(groundNoise);
         Renderer rend = cube.GetComponent<Renderer>();
         if (rend != null)
@@ -441,7 +448,6 @@ public class MapGenerator : MonoBehaviour
         float totalHeight = tileSizeWorld;
 
         GameObject cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
-
         Material picked = PickForestGroundMaterial(groundNoise);
         Renderer rend = cube.GetComponent<Renderer>();
         if (rend != null)
@@ -478,8 +484,8 @@ public class MapGenerator : MonoBehaviour
 
         float extraHeight = 0f;
         float normalizedHeight = 0f;
-
         bool blocked = noise >= wallThreshold;
+
         if (blocked)
         {
             normalizedHeight = (noise - wallThreshold) / (1f - wallThreshold);
@@ -575,6 +581,162 @@ public class MapGenerator : MonoBehaviour
 
         if (!isOpenPath && spawnTree && forestTreePrefab != null)
             CreatePreviewPropOnTile(parent, forestTreePrefab, cube.transform);
+    }
+
+    void GenerateStructuresForChunk(int seed)
+    {
+        float roll = Hash01(seed, 9001);
+        if (roll > chunkHasStructureChance) return;
+
+        for (int attempt = 0; attempt < maxStructureAttemptsPerChunk; attempt++)
+        {
+            int structureSeed = seed ^ (attempt * 92821);
+            int type = PickStructureType(structureSeed);
+
+            if (type == 0)
+            {
+                if (TryPlaceStructure(chestPrefab, 1, 1, structureSeed, "Chest"))
+                    return;
+            }
+            else if (type == 1)
+            {
+                bool rotate = Hash01(structureSeed, 44) > 0.5f;
+                int w = rotate ? 5 : 3;
+                int h = rotate ? 3 : 5;
+
+                if (TryPlaceStructure(cabinPrefab, w, h, structureSeed, "Cabin"))
+                    return;
+            }
+            else
+            {
+                if (TryPlaceStructure(towerPrefab, 3, 3, structureSeed, "Tower"))
+                    return;
+            }
+        }
+    }
+
+    int PickStructureType(int seed)
+    {
+        float total = chestWeight + cabinWeight + towerWeight;
+        if (total <= 0f) return 0;
+
+        float v = Hash01(seed, 777) * total;
+
+        if (v < chestWeight) return 0;
+        v -= chestWeight;
+
+        if (v < cabinWeight) return 1;
+        return 2;
+    }
+
+    bool TryPlaceStructure(GameObject prefab, int sizeX, int sizeZ, int seed, string structureName)
+    {
+        if (prefab == null) return false;
+
+        int maxX = tileCount - sizeX;
+        int maxZ = tileCount - sizeZ;
+        if (maxX < 0 || maxZ < 0) return false;
+
+        int startX = Mathf.FloorToInt(Hash01(seed, 101) * (maxX + 1));
+        int startZ = Mathf.FloorToInt(Hash01(seed, 202) * (maxZ + 1));
+
+        for (int ring = 0; ring < tileCount; ring++)
+        {
+            for (int dx = -ring; dx <= ring; dx++)
+            {
+                for (int dz = -ring; dz <= ring; dz++)
+                {
+                    if (Mathf.Abs(dx) != ring && Mathf.Abs(dz) != ring) continue;
+
+                    int x = startX + dx;
+                    int z = startZ + dz;
+
+                    if (!CanPlaceStructureFootprint(x, z, sizeX, sizeZ))
+                        continue;
+
+                    PlaceStructure(prefab, x, z, sizeX, sizeZ, structureName);
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    bool CanPlaceStructureFootprint(int startX, int startZ, int sizeX, int sizeZ)
+    {
+        if (startX < 0 || startZ < 0) return false;
+        if (startX + sizeX > tileCount || startZ + sizeZ > tileCount) return false;
+
+        float firstTop = -999f;
+
+        for (int x = startX; x < startX + sizeX; x++)
+        {
+            for (int z = startZ; z < startZ + sizeZ; z++)
+            {
+                if (!isGreen[x, z]) return false;
+                if (tiles[x, z] == null) return false;
+
+                float topY = tiles[x, z].position.y + (tiles[x, z].lossyScale.y * 0.5f);
+
+                if (firstTop < -100f) firstTop = topY;
+                if (Mathf.Abs(topY - firstTop) > 0.05f) return false;
+            }
+        }
+
+        return true;
+    }
+
+    void PlaceStructure(GameObject prefab, int startX, int startZ, int sizeX, int sizeZ, string structureName)
+    {
+        float minX = float.MaxValue;
+        float maxX = float.MinValue;
+        float minZ = float.MaxValue;
+        float maxZ = float.MinValue;
+        float topY = 0f;
+
+        for (int x = startX; x < startX + sizeX; x++)
+        {
+            for (int z = startZ; z < startZ + sizeZ; z++)
+            {
+                Transform t = tiles[x, z];
+                Vector3 p = t.position;
+
+                if (p.x < minX) minX = p.x;
+                if (p.x > maxX) maxX = p.x;
+                if (p.z < minZ) minZ = p.z;
+                if (p.z > maxZ) maxZ = p.z;
+
+                topY = t.position.y + (t.lossyScale.y * 0.5f);
+                MarkTileBlocked(x, z);
+            }
+        }
+
+        Vector3 center = new Vector3(
+            (minX + maxX) * 0.5f,
+            topY,
+            (minZ + maxZ) * 0.5f
+        );
+
+        GameObject obj = Instantiate(prefab, transform);
+        obj.name = structureName;
+        obj.transform.position = center;
+        obj.transform.rotation = Quaternion.identity;
+    }
+
+    float Hash01(int seed, int salt)
+    {
+        unchecked
+        {
+            int h = seed;
+            h = (h * 397) ^ salt;
+            h ^= (h << 13);
+            h ^= (h >> 17);
+            h ^= (h << 5);
+
+            uint u = (uint)h;
+            return (u % 100000) / 100000f;
+        }
     }
 
     void MarkTileBlocked(int x, int z)
