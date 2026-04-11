@@ -126,6 +126,9 @@ public class MapGenerator : MonoBehaviour
 
     void Start()
     {
+        if (WorldSeedManager.Instance != null)
+            worldSeed = WorldSeedManager.Instance.selectedSeed;
+
         LoadChunk(currentChunk, null, null);
         UpdateChunkUI();
         ApplyCameraTargetIfEnabled();
@@ -136,6 +139,10 @@ public class MapGenerator : MonoBehaviour
         if (doGen)
         {
             doGen = false;
+
+            if (WorldSeedManager.Instance != null)
+                worldSeed = WorldSeedManager.Instance.selectedSeed;
+
             LoadChunk(currentChunk, null, null);
             UpdateChunkUI();
             ApplyCameraTargetIfEnabled();
