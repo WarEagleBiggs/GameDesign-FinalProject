@@ -110,7 +110,7 @@ public class MapGenerator : MonoBehaviour
     private bool[,] isGreen;
 
     private Vector2Int currentChunk = Vector2Int.zero;
-    private BiomeType currentBiome = BiomeType.Plains;
+    public BiomeType currentBiome = BiomeType.Plains;
 
     private int walkableLayer = -1;
     private int blockedLayer = -1;
@@ -183,7 +183,7 @@ public class MapGenerator : MonoBehaviour
     void UpdateChunkUI()
     {
         if (chunkText != null)
-            chunkText.SetText($"CHUNK: {currentChunk.x}, {currentChunk.y}\nBIOME: {currentBiome}");
+            chunkText.SetText($"CHUNK: {currentChunk.x}, {currentChunk.y}\nBIOME: {currentBiome}\nLEVEL: 0");
     }
 
     public void TravelToNeighborChunk(EntryDirection exitSide, int exitX, int exitZ)
@@ -216,6 +216,10 @@ public class MapGenerator : MonoBehaviour
     {
         int chunkSeed = GetChunkSeed(chunkCoord.x, chunkCoord.y);
         currentBiome = GetBiomeForChunk(chunkCoord, chunkSeed);
+
+        TileCutout cut = FindObjectOfType<TileCutout>();
+        if (cut != null)
+            cut.enabled = (currentBiome == BiomeType.Mountains);
 
         GenerateWithSeed(chunkCoord, chunkSeed, currentBiome);
 
@@ -603,8 +607,6 @@ public class MapGenerator : MonoBehaviour
             maxStructuresPerChunk
         );
 
-        int placed = 0;
-
         for (int i = 0; i < structuresToPlace; i++)
         {
             bool placedThisOne = false;
@@ -618,7 +620,6 @@ public class MapGenerator : MonoBehaviour
                 {
                     if (TryPlaceStructure(chestPrefab, 1, 1, structureSeed, "Chest"))
                     {
-                        placed++;
                         placedThisOne = true;
                         break;
                     }
@@ -631,7 +632,6 @@ public class MapGenerator : MonoBehaviour
 
                     if (TryPlaceStructure(cabinPrefab, w, h, structureSeed, "Cabin"))
                     {
-                        placed++;
                         placedThisOne = true;
                         break;
                     }
@@ -640,7 +640,6 @@ public class MapGenerator : MonoBehaviour
                 {
                     if (TryPlaceStructure(towerPrefab, 3, 3, structureSeed, "Tower"))
                     {
-                        placed++;
                         placedThisOne = true;
                         break;
                     }
@@ -931,10 +930,6 @@ public class MapGenerator : MonoBehaviour
             }
         }
 
-        //int xrayLayer = LayerMask.NameToLayer("XRay");
-        /*if (xrayLayer != -1)
-            SetLayerRecursively(playerObj, xrayLayer);*/
-
         playerObj.transform.localScale = new Vector3(tileSizeWorld, tileSizeWorld, tileSizeWorld);
 
         Renderer pr = playerObj.GetComponent<Renderer>();
@@ -952,7 +947,11 @@ public class MapGenerator : MonoBehaviour
         p.allowDiagonal = allowDiagonalMovement;
 
         TileCutout cut = FindObjectOfType<TileCutout>();
-        if (cut != null) cut.target = playerObj.transform;
+        if (cut != null)
+        {
+            cut.target = playerObj.transform;
+            cut.enabled = (currentBiome == BiomeType.Mountains);
+        }
     }
 
     void SpawnPlayerOnSafeGreenCell()

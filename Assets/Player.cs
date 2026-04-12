@@ -76,19 +76,12 @@ public class Player : MonoBehaviour
     {
         if (cam == null) cam = Camera.main;
     }
-    
 
     void Update()
     {
-        //load main menu
         if (Input.GetKeyDown(KeyCode.Escape))
-        {
             SceneManager.LoadScene("MainMenu");
-        }
-        
-        
-        
-        
+
         if (debugAlwaysTrue) turn = true;
 
         if (!turn)
@@ -159,7 +152,6 @@ public class Player : MonoBehaviour
         hoveredTile = best;
         hoveredRenderer = bestR;
         hoveredPrevMat = hoveredRenderer.sharedMaterial;
-
         hoveredRenderer.sharedMaterial = hoverSelectedMat;
     }
 
@@ -178,7 +170,6 @@ public class Player : MonoBehaviour
         if (cam == null) return;
 
         Ray ray = cam.ScreenPointToRay(Input.mousePosition);
-
         RaycastHit[] hits = Physics.RaycastAll(ray, 2000f, ~0, QueryTriggerInteraction.Ignore);
         if (hits == null || hits.Length == 0) return;
 
@@ -204,7 +195,6 @@ public class Player : MonoBehaviour
             }
 
             if (!ht.name.StartsWith("Tile_")) continue;
-
             if (!highlightedTiles.Contains(ht)) return;
 
             MovePlayerToTile(ht);
@@ -222,7 +212,10 @@ public class Player : MonoBehaviour
 
     void FlattenTilesBlockingCamera()
     {
-        if (mapGen == null || cam == null) return;
+        if (mapGen == null || mapGen.currentBiome != MapGenerator.BiomeType.Mountains)
+            return;
+
+        if (cam == null) return;
 
         float tileSize = GetTileSizeWorld();
         float flatHeight = tileSize * flatHeightMultiplier;
@@ -268,7 +261,6 @@ public class Player : MonoBehaviour
             if (t == null) continue;
 
             if (t == transform || t.IsChildOf(transform)) continue;
-
             if (!t.name.StartsWith("Tile_")) continue;
 
             Renderer r = t.GetComponent<Renderer>();
@@ -382,6 +374,7 @@ public class Player : MonoBehaviour
     {
         for (int i = 0; i < exits.Count; i++)
             if (exits[i].obj != null) Destroy(exits[i].obj);
+
         exits.Clear();
     }
 
@@ -435,6 +428,7 @@ public class Player : MonoBehaviour
     {
         Transform t00 = mapGen.transform.Find("Tile_0_0");
         Transform t10 = mapGen.transform.Find("Tile_1_0");
+
         if (t00 != null && t10 != null)
             return Mathf.Abs(t10.position.x - t00.position.x);
 
