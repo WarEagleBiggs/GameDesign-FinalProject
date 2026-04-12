@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 public class Player : MonoBehaviour
 {
@@ -75,9 +76,19 @@ public class Player : MonoBehaviour
     {
         if (cam == null) cam = Camera.main;
     }
+    
 
     void Update()
     {
+        //load main menu
+        if (Input.GetKeyDown(KeyCode.Escape))
+        {
+            SceneManager.LoadScene("MainMenu");
+        }
+        
+        
+        
+        
         if (debugAlwaysTrue) turn = true;
 
         if (!turn)
