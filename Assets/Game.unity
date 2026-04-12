@@ -412,11 +412,12 @@ MonoBehaviour:
     type: 3}
   chestPrefab: {fileID: 5805440832310495564, guid: c33d85a2389f7b54784c98e05c627d94,
     type: 3}
-  chunkHasStructureChance: 0.939
-  maxStructuresPerChunk: 4
-  chestWeight: 0.65
-  cabinWeight: 0.2
-  towerWeight: 0.15
+  moss1Prefab: {fileID: 1529099734360730751, guid: b4d3eae66335dbd458e6b7a15690b2b9,
+    type: 3}
+  moss2Prefab: {fileID: 2765204920664335181, guid: 709f753f71e155548bb7b1a8d090e03c,
+    type: 3}
+  chunkHasStructureChance: 0.892
+  maxStructuresPerChunk: 6
   maxStructureAttemptsPerChunk: 12
   showNeighborPreviews: 1
   previewAlpha: 0.35

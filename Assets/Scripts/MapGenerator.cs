@@ -68,16 +68,15 @@ public class MapGenerator : MonoBehaviour
     public float riverWiggleScale = 3.5f;
     public float riverDepth = 0.35f;
 
-    [Header("Structures")]
-    public GameObject cabinPrefab;
-    public GameObject towerPrefab;
-    public GameObject chestPrefab;
-    [Range(0f, 1f)] public float chunkHasStructureChance = 0.35f;
-    [Range(1, 4)] public int maxStructuresPerChunk = 4;
-    [Range(0f, 1f)] public float chestWeight = 0.65f;
-    [Range(0f, 1f)] public float cabinWeight = 0.2f;
-    [Range(0f, 1f)] public float towerWeight = 0.15f;
-    [Range(1, 50)] public int maxStructureAttemptsPerChunk = 20;
+        [Header("Structures")]
+        public GameObject cabinPrefab;
+        public GameObject towerPrefab;
+        public GameObject chestPrefab;
+        public GameObject moss1Prefab;
+        public GameObject moss2Prefab;
+        [Range(0f, 1f)] public float chunkHasStructureChance = 0.35f;
+        [Range(1, 8)] public int maxStructuresPerChunk = 8;
+        [Range(1, 50)] public int maxStructureAttemptsPerChunk = 20;
 
     [Header("Neighbor Preview")]
     public bool showNeighborPreviews = true;
@@ -618,74 +617,77 @@ public class MapGenerator : MonoBehaviour
             CreatePreviewPropOnTile(parent, forestTreePrefab, cube.transform);
     }
 
-    void GenerateStructuresForChunk(int seed)
-    {
-        float roll = Hash01(seed, 9001);
-        if (roll > chunkHasStructureChance) return;
-
-        int structuresToPlace = Mathf.Clamp(
-            Mathf.FloorToInt(Hash01(seed, 9002) * (maxStructuresPerChunk + 1)),
-            1,
-            maxStructuresPerChunk
-        );
-
-        for (int i = 0; i < structuresToPlace; i++)
+        void GenerateStructuresForChunk(int seed)
         {
-            bool placedThisOne = false;
-
-            for (int attempt = 0; attempt < maxStructureAttemptsPerChunk; attempt++)
+            float roll = Hash01(seed, 9001);
+            if (roll > chunkHasStructureChance) return;
+    
+            int structuresToPlace = 1 + Mathf.FloorToInt(Hash01(seed, 9002) * maxStructuresPerChunk);
+    
+            for (int i = 0; i < structuresToPlace; i++)
             {
-                int structureSeed = seed ^ (i * 92821) ^ (attempt * 68917);
-                int type = PickStructureType(structureSeed);
-
-                if (type == 0)
+                bool placedThisOne = false;
+    
+                for (int attempt = 0; attempt < maxStructureAttemptsPerChunk; attempt++)
                 {
-                    if (TryPlaceStructure(chestPrefab, 1, 1, structureSeed, "Chest"))
+                    int structureSeed = seed ^ (i * 92821) ^ (attempt * 68917);
+                    int type = PickStructureType(structureSeed);
+    
+                    if (type == 0)
                     {
-                        placedThisOne = true;
-                        break;
+                        if (TryPlaceStructure(chestPrefab, 1, 1, structureSeed, "Chest"))
+                        {
+                            placedThisOne = true;
+                            break;
+                        }
+                    }
+                    else if (type == 1)
+                    {
+                        bool rotate = Hash01(structureSeed, 44) > 0.5f;
+                        int w = rotate ? 5 : 3;
+                        int h = rotate ? 3 : 5;
+    
+                        if (TryPlaceStructure(cabinPrefab, w, h, structureSeed, "Cabin"))
+                        {
+                            placedThisOne = true;
+                            break;
+                        }
+                    }
+                    else if (type == 2)
+                    {
+                        if (TryPlaceStructure(towerPrefab, 3, 3, structureSeed, "Tower"))
+                        {
+                            placedThisOne = true;
+                            break;
+                        }
+                    }
+                    else if (type == 3)
+                    {
+                        if (TryPlaceStructure(moss1Prefab, 3, 5, structureSeed, "Moss1"))
+                        {
+                            placedThisOne = true;
+                            break;
+                        }
+                    }
+                    else
+                    {
+                        if (TryPlaceStructure(moss2Prefab, 3, 3, structureSeed, "Moss2"))
+                        {
+                            placedThisOne = true;
+                            break;
+                        }
                     }
                 }
-                else if (type == 1)
-                {
-                    bool rotate = Hash01(structureSeed, 44) > 0.5f;
-                    int w = rotate ? 5 : 3;
-                    int h = rotate ? 3 : 5;
-
-                    if (TryPlaceStructure(cabinPrefab, w, h, structureSeed, "Cabin"))
-                    {
-                        placedThisOne = true;
-                        break;
-                    }
-                }
-                else
-                {
-                    if (TryPlaceStructure(towerPrefab, 3, 3, structureSeed, "Tower"))
-                    {
-                        placedThisOne = true;
-                        break;
-                    }
-                }
+    
+                if (!placedThisOne)
+                    continue;
             }
-
-            if (!placedThisOne)
-                continue;
         }
-    }
 
-    int PickStructureType(int seed)
-    {
-        float total = chestWeight + cabinWeight + towerWeight;
-        if (total <= 0f) return 0;
-
-        float v = Hash01(seed, 777) * total;
-
-        if (v < chestWeight) return 0;
-        v -= chestWeight;
-
-        if (v < cabinWeight) return 1;
-        return 2;
-    }
+        int PickStructureType(int seed)
+        {
+            return Mathf.FloorToInt(Hash01(seed, 777) * 5f);
+        }
 
     bool TryPlaceStructure(GameObject prefab, int sizeX, int sizeZ, int seed, string structureName)
     {
