@@ -74,6 +74,7 @@ public class MapGenerator : MonoBehaviour
     public Material blockedRedMat;
 
     [Header("Player Settings")]
+    public GameObject playerPrefab;
     public Material playerMat;
     public Material highlightBlueMat;
     public Material hoverSelectedMat;
@@ -889,12 +890,23 @@ public class MapGenerator : MonoBehaviour
 
         if (playerObj == null)
         {
-            playerObj = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            playerObj.name = "Player";
-            playerObj.layer = LayerMask.NameToLayer("XRay");
+            if (playerPrefab != null)
+            {
+                playerObj = Instantiate(playerPrefab);
+                playerObj.name = "Player";
+            }
+            else
+            {
+                playerObj = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                playerObj.name = "Player";
+            }
         }
 
-        playerObj.transform.localScale = Vector3.one * tileSizeWorld;
+        //int xrayLayer = LayerMask.NameToLayer("XRay");
+        /*if (xrayLayer != -1)
+            SetLayerRecursively(playerObj, xrayLayer);*/
+
+        playerObj.transform.localScale = new Vector3(tileSizeWorld, tileSizeWorld, tileSizeWorld);
 
         Renderer pr = playerObj.GetComponent<Renderer>();
         if (pr != null && playerMat != null)
@@ -1038,14 +1050,16 @@ public class MapGenerator : MonoBehaviour
         return true;
     }
 
-    void PlacePlayerOnTile(Transform tile)
+    public float playerYOffset;
+
+    public void PlacePlayerOnTile(Transform tile)
     {
         float tileTopY = tile.position.y + (tile.lossyScale.y * 0.5f);
-        float playerHalf = playerObj.transform.lossyScale.y * 0.5f;
+        float playerHalfY = playerObj.transform.localScale.y * 0.5f;
 
         playerObj.transform.position = new Vector3(
             tile.position.x,
-            tileTopY + playerHalf,
+            tileTopY + playerHalfY + playerYOffset,
             tile.position.z
         );
     }

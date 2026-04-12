@@ -387,14 +387,7 @@ public class Player : MonoBehaviour
 
     void MovePlayerToTile(Transform tile)
     {
-        float tileTopY = tile.position.y + (tile.lossyScale.y * 0.5f);
-        float playerHalf = transform.lossyScale.y * 0.5f;
-
-        transform.position = new Vector3(
-            tile.position.x,
-            tileTopY + playerHalf,
-            tile.position.z
-        );
+        mapGen.PlacePlayerOnTile(tile);
     }
 
     Transform GetTileUnderPlayer()
