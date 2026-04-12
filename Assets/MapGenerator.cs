@@ -59,10 +59,11 @@ public class MapGenerator : MonoBehaviour
     public GameObject towerPrefab;
     public GameObject chestPrefab;
     [Range(0f, 1f)] public float chunkHasStructureChance = 0.35f;
+    [Range(1, 4)] public int maxStructuresPerChunk = 4;
     [Range(0f, 1f)] public float chestWeight = 0.65f;
     [Range(0f, 1f)] public float cabinWeight = 0.2f;
     [Range(0f, 1f)] public float towerWeight = 0.15f;
-    [Range(1, 20)] public int maxStructureAttemptsPerChunk = 12;
+    [Range(1, 50)] public int maxStructureAttemptsPerChunk = 20;
 
     [Header("Neighbor Preview")]
     public bool showNeighborPreviews = true;
@@ -596,30 +597,58 @@ public class MapGenerator : MonoBehaviour
         float roll = Hash01(seed, 9001);
         if (roll > chunkHasStructureChance) return;
 
-        for (int attempt = 0; attempt < maxStructureAttemptsPerChunk; attempt++)
+        int structuresToPlace = Mathf.Clamp(
+            Mathf.FloorToInt(Hash01(seed, 9002) * (maxStructuresPerChunk + 1)),
+            1,
+            maxStructuresPerChunk
+        );
+
+        int placed = 0;
+
+        for (int i = 0; i < structuresToPlace; i++)
         {
-            int structureSeed = seed ^ (attempt * 92821);
-            int type = PickStructureType(structureSeed);
+            bool placedThisOne = false;
 
-            if (type == 0)
+            for (int attempt = 0; attempt < maxStructureAttemptsPerChunk; attempt++)
             {
-                if (TryPlaceStructure(chestPrefab, 1, 1, structureSeed, "Chest"))
-                    return;
-            }
-            else if (type == 1)
-            {
-                bool rotate = Hash01(structureSeed, 44) > 0.5f;
-                int w = rotate ? 5 : 3;
-                int h = rotate ? 3 : 5;
+                int structureSeed = seed ^ (i * 92821) ^ (attempt * 68917);
+                int type = PickStructureType(structureSeed);
 
-                if (TryPlaceStructure(cabinPrefab, w, h, structureSeed, "Cabin"))
-                    return;
+                if (type == 0)
+                {
+                    if (TryPlaceStructure(chestPrefab, 1, 1, structureSeed, "Chest"))
+                    {
+                        placed++;
+                        placedThisOne = true;
+                        break;
+                    }
+                }
+                else if (type == 1)
+                {
+                    bool rotate = Hash01(structureSeed, 44) > 0.5f;
+                    int w = rotate ? 5 : 3;
+                    int h = rotate ? 3 : 5;
+
+                    if (TryPlaceStructure(cabinPrefab, w, h, structureSeed, "Cabin"))
+                    {
+                        placed++;
+                        placedThisOne = true;
+                        break;
+                    }
+                }
+                else
+                {
+                    if (TryPlaceStructure(towerPrefab, 3, 3, structureSeed, "Tower"))
+                    {
+                        placed++;
+                        placedThisOne = true;
+                        break;
+                    }
+                }
             }
-            else
-            {
-                if (TryPlaceStructure(towerPrefab, 3, 3, structureSeed, "Tower"))
-                    return;
-            }
+
+            if (!placedThisOne)
+                continue;
         }
     }
 

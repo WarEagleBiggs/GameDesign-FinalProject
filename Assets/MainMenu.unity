@@ -337,7 +337,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   tileCount: 40
   mapSize: 40
-  worldSeed: 12345
+  worldSeed: 823821312
   noiseScale: 6
   heightMultiplier: 6
   wallThreshold: 0.5
@@ -1770,7 +1770,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3dbc143010ac8d1428da51d017d81fd7, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  selectedSeed: 12345
+  selectedSeed: 823821312
 --- !u!4 &1943483637
 Transform:
   m_ObjectHideFlags: 0
