@@ -57,6 +57,16 @@ public class MapGenerator : MonoBehaviour
     public GameObject cactusPrefab;
     [Range(0f, 1f)]
     public float desertCactusChance = 0.03f;
+    
+    [Header("River")]
+    public Material waterMatA;
+    public Material waterMatB;
+    public Material waterMatC;
+    public float riverNoiseScale = 7f;
+    [Range(0.01f, 0.3f)]
+    public float riverWidth = 0.08f;
+    public float riverWiggleScale = 3.5f;
+    public float riverDepth = 0.35f;
 
     [Header("Structures")]
     public GameObject cabinPrefab;
@@ -106,7 +116,7 @@ public class MapGenerator : MonoBehaviour
     public bool doGen;
 
     public enum EntryDirection { North, South, East, West }
-    public enum BiomeType { Mountains, Plains, Desert, Forest }
+    public enum BiomeType { Mountains, Plains, Desert, Forest, River }
 
     private GameObject playerObj;
     private Transform previewRoot;
@@ -247,12 +257,13 @@ public class MapGenerator : MonoBehaviour
         }
 
         int h = Mathf.Abs(chunkSeed);
-        int v = h % 4;
+        int v = h % 5;
 
         if (v == 0) return BiomeType.Forest;
         if (v == 1) return BiomeType.Plains;
         if (v == 2) return BiomeType.Mountains;
-        return BiomeType.Desert;
+        if (v == 3) return BiomeType.Desert;
+        return BiomeType.River;
     }
 
     int GetChunkSeed(int chunkX, int chunkZ)
@@ -303,8 +314,10 @@ public class MapGenerator : MonoBehaviour
                     GeneratePlainsTile(x, z, xPos, zPos, tileSizeWorld, offsetX, offsetZ, seed);
                 else if (biome == BiomeType.Desert)
                     GenerateDesertTile(x, z, xPos, zPos, tileSizeWorld, offsetX, offsetZ, seed);
-                else
+                else if (biome == BiomeType.Forest)
                     GenerateForestTile(x, z, xPos, zPos, tileSizeWorld, offsetX, offsetZ, seed);
+                else
+                    GenerateRiverTile(x, z, xPos, zPos, tileSizeWorld, offsetX, offsetZ, seed);
             }
         }
 
@@ -357,8 +370,10 @@ public class MapGenerator : MonoBehaviour
                     GeneratePreviewPlainsTile(chunkObj.transform, x, z, xPos, zPos, tileSizeWorld, offsetX, offsetZ, seed);
                 else if (biome == BiomeType.Desert)
                     GeneratePreviewDesertTile(chunkObj.transform, x, z, xPos, zPos, tileSizeWorld, offsetX, offsetZ, seed);
-                else
+                else if (biome == BiomeType.Forest)
                     GeneratePreviewForestTile(chunkObj.transform, x, z, xPos, zPos, tileSizeWorld, offsetX, offsetZ, seed);
+                else
+                    GeneratePreviewRiverTile(chunkObj.transform, x, z, xPos, zPos, tileSizeWorld, offsetX, offsetZ, seed);
             }
         }
     }
@@ -1154,5 +1169,86 @@ public class MapGenerator : MonoBehaviour
         if (idx == 0) return desertMatA;
         if (idx == 1) return desertMatB;
         return desertMatC;
+    }
+    
+        void GenerateRiverTile(int x, int z, float xPos, float zPos, float tileSizeWorld, float offsetX, float offsetZ, int seed)
+        {
+            float groundNoise = Mathf.PerlinNoise((x / noiseScale) + offsetX, (z / noiseScale) + offsetZ);
+    
+            float riverLine = Mathf.PerlinNoise(
+                (x / riverNoiseScale) + offsetX + 100f,
+                (z / riverNoiseScale) + offsetZ + 200f
+            );
+    
+            float riverValue = Mathf.Abs(riverLine - 0.5f);
+            bool isWater = riverValue < riverWidth;
+    
+            float totalHeight = isWater ? Mathf.Max(0.1f, tileSizeWorld - riverDepth) : tileSizeWorld;
+    
+            GameObject cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            Renderer rend = cube.GetComponent<Renderer>();
+    
+            Material picked = isWater ? PickRiverWaterMaterial(groundNoise) : PickPlainsGroundMaterial(groundNoise);
+    
+            if (rend != null)
+                rend.sharedMaterial = picked != null ? picked : baseMat;
+    
+            cube.transform.SetParent(transform, false);
+            cube.transform.localScale = new Vector3(tileSizeWorld, totalHeight, tileSizeWorld);
+            cube.transform.localPosition = new Vector3(xPos, totalHeight * 0.5f, zPos);
+            cube.name = $"Tile_{x}_{z}";
+    
+            if (isWater)
+            {
+                if (blockedLayer != -1) cube.layer = blockedLayer;
+                isGreen[x, z] = false;
+            }
+            else
+            {
+                if (walkableLayer != -1) cube.layer = walkableLayer;
+                isGreen[x, z] = true;
+            }
+    
+            tiles[x, z] = cube.transform;
+        }
+    
+        void GeneratePreviewRiverTile(Transform parent, int x, int z, float xPos, float zPos, float tileSizeWorld, float offsetX, float offsetZ, int seed)
+        {
+            float groundNoise = Mathf.PerlinNoise((x / noiseScale) + offsetX, (z / noiseScale) + offsetZ);
+    
+            float riverLine = Mathf.PerlinNoise(
+                (x / riverNoiseScale) + offsetX + 100f,
+                (z / riverNoiseScale) + offsetZ + 200f
+            );
+    
+            float riverValue = Mathf.Abs(riverLine - 0.5f);
+            bool isWater = riverValue < riverWidth;
+    
+            float totalHeight = isWater ? Mathf.Max(0.1f, tileSizeWorld - riverDepth) : tileSizeWorld;
+    
+            GameObject cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
+    
+            Collider col = cube.GetComponent<Collider>();
+            if (col != null) Destroy(col);
+    
+            Material picked = isWater ? PickRiverWaterMaterial(groundNoise) : PickPlainsGroundMaterial(groundNoise);
+            ApplyPreviewMaterial(cube, picked != null ? picked : baseMat);
+    
+            cube.transform.SetParent(parent, false);
+            cube.transform.localScale = new Vector3(tileSizeWorld, totalHeight, tileSizeWorld);
+            cube.transform.localPosition = new Vector3(xPos, totalHeight * 0.5f, zPos);
+            cube.name = $"PreviewTile_{x}_{z}";
+    
+            if (ignoreRaycastLayer != -1)
+                cube.layer = ignoreRaycastLayer;
+        }
+    Material PickRiverWaterMaterial(float noise01)
+    {
+        int idx = Mathf.FloorToInt(noise01 * 3f);
+        if (idx > 2) idx = 2;
+
+        if (idx == 0) return waterMatA;
+        if (idx == 1) return waterMatB;
+        return waterMatC;
     }
 }
