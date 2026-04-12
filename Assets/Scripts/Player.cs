@@ -182,6 +182,31 @@ public class Player : MonoBehaviour
             Transform ht = hits[i].collider.transform;
             if (ht == null) continue;
 
+            Transform clickedObj = ht;
+
+            while (clickedObj != null)
+            {
+                if (clickedObj.CompareTag("Chest"))
+                {
+                    ChestLoot chest = clickedObj.GetComponent<ChestLoot>();
+                    if (chest == null)
+                        chest = clickedObj.GetComponentInParent<ChestLoot>();
+
+                    if (chest != null)
+                        chest.OpenChest(mapGen);
+
+                    return;
+                }
+
+                if (clickedObj.CompareTag("Cabin"))
+                {
+                    Debug.Log("START TRADE");
+                    return;
+                }
+
+                clickedObj = clickedObj.parent;
+            }
+
             for (int e = 0; e < exits.Count; e++)
             {
                 if (exits[e].obj != null && ht.gameObject == exits[e].obj)

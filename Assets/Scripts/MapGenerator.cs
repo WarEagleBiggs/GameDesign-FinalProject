@@ -4,6 +4,10 @@ using UnityEngine;
 
 public class MapGenerator : MonoBehaviour
 {
+    [Header("Player STATS")] 
+    public int coins = 0;
+    public int level = 0;
+    
     [Header("World Size")]
     [Range(4, 128)]
     public int tileCount = 40;
@@ -96,6 +100,7 @@ public class MapGenerator : MonoBehaviour
 
     [Header("UI")]
     public TextMeshProUGUI chunkText;
+    public TextMeshProUGUI coinsText;
 
     [Header("Debug")]
     public bool doGen;
@@ -149,6 +154,8 @@ public class MapGenerator : MonoBehaviour
             UpdateChunkUI();
             ApplyCameraTargetIfEnabled();
         }
+        
+        coinsText.SetText(coins.ToString());
     }
 
     void EnsurePreviewRoot()
