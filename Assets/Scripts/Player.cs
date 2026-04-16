@@ -593,8 +593,10 @@ public class Player : MonoBehaviour
         if (currentHearts > 0) return;
 
         Debug.Log("Player defeated.");
+        ExplosionEffect.Spawn(transform.position, Color.cyan, Mathf.Max(transform.localScale.x, 1f));
         if (mapGen != null)
             mapGen.ShowDeathScreen();
+        gameObject.SetActive(false);
         enabled = false;
     }
 }

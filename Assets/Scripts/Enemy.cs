@@ -13,6 +13,7 @@ public class Enemy : MonoBehaviour
     private HitPulse hitPulse;
     private GameObject attackIndicator;
     private Material attackIndicatorMaterial;
+    private GameObject attackIndicatorInner;
 
     void Awake()
     {
@@ -63,6 +64,7 @@ public class Enemy : MonoBehaviour
         if (mapGen != null)
             mapGen.RemoveEnemy(this);
 
+        ExplosionEffect.Spawn(transform.position, Color.yellow, Mathf.Max(transform.localScale.x, 1f));
         Destroy(gameObject);
     }
 
@@ -117,6 +119,22 @@ public class Enemy : MonoBehaviour
             rend.receiveShadows = false;
         }
 
+        attackIndicatorInner = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+        attackIndicatorInner.name = "AttackIndicatorInner";
+        attackIndicatorInner.transform.SetParent(attackIndicator.transform, false);
+        attackIndicatorInner.layer = LayerMask.NameToLayer("Ignore Raycast");
+
+        Collider innerCol = attackIndicatorInner.GetComponent<Collider>();
+        if (innerCol != null) Destroy(innerCol);
+
+        Renderer innerRend = attackIndicatorInner.GetComponent<Renderer>();
+        if (innerRend != null)
+        {
+            innerRend.sharedMaterial = rend != null ? rend.sharedMaterial : null;
+            innerRend.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            innerRend.receiveShadows = false;
+        }
+
         UpdateAttackIndicatorPosition();
         attackIndicator.SetActive(false);
     }
@@ -126,7 +144,13 @@ public class Enemy : MonoBehaviour
         if (attackIndicator == null) return;
 
         float scale = Mathf.Max(transform.localScale.x, 0.01f);
-        attackIndicator.transform.localScale = new Vector3(scale * 1.1f, scale * 0.05f, scale * 1.1f);
-        attackIndicator.transform.localPosition = new Vector3(0f, scale * 1.9f, 0f);
+        attackIndicator.transform.localScale = new Vector3(scale * 1.9f, scale * 0.04f, scale * 1.9f);
+        attackIndicator.transform.localPosition = new Vector3(0f, scale * 2.35f, 0f);
+
+        if (attackIndicatorInner != null)
+        {
+            attackIndicatorInner.transform.localScale = new Vector3(0.45f, 1.1f, 0.45f);
+            attackIndicatorInner.transform.localPosition = Vector3.zero;
+        }
     }
 }

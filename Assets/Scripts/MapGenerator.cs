@@ -213,6 +213,7 @@ public class MapGenerator : MonoBehaviour
         
         coinsText.SetText(coins.ToString());
         UpdateMoveTrail();
+        UpdateEnemyAttackIndicators();
     }
 
     void EnsurePlayerHeartRefs()
@@ -1376,8 +1377,9 @@ public class MapGenerator : MonoBehaviour
 
     Vector2Int GetNextEnemyStep(Vector2Int from, Vector2Int playerCoords)
     {
-        Vector2Int best = from;
         int bestDistance = GetTileDistance(from, playerCoords);
+        List<Vector2Int> bestCandidates = new List<Vector2Int>();
+        List<Vector2Int> pressureCandidates = new List<Vector2Int>();
 
         for (int dx = -1; dx <= 1; dx++)
         {
@@ -1391,14 +1393,42 @@ public class MapGenerator : MonoBehaviour
                 if (candidate == playerCoords) continue;
 
                 int dist = GetTileDistance(candidate, playerCoords);
-                if (dist >= bestDistance) continue;
+                if (dist > bestDistance) continue;
 
-                best = candidate;
-                bestDistance = dist;
+                if (dist < bestDistance)
+                {
+                    bestDistance = dist;
+                    bestCandidates.Clear();
+                }
+
+                if (!bestCandidates.Contains(candidate))
+                    bestCandidates.Add(candidate);
+
+                int combatDist = GetCombatDistance(candidate, playerCoords);
+                if (combatDist <= enemyAttackRange + 1 && !pressureCandidates.Contains(candidate))
+                    pressureCandidates.Add(candidate);
             }
         }
 
-        return best;
+        if (bestCandidates.Count == 0)
+            return from;
+
+        int seed = unchecked(
+            from.x * 92821 ^
+            from.y * 68917 ^
+            playerCoords.x * 1237 ^
+            playerCoords.y * 3253 ^
+            worldSeed
+        );
+
+        if (pressureCandidates.Count > 0 && Hash01(seed, 501) > 0.45f)
+        {
+            int pressurePick = Mathf.Abs(seed + 13) % pressureCandidates.Count;
+            return pressureCandidates[pressurePick];
+        }
+
+        int pick = Mathf.Abs(seed) % bestCandidates.Count;
+        return bestCandidates[pick];
     }
 
     public bool TryGetEnemyFromHit(Transform hitTransform, out Enemy enemy)
@@ -1419,7 +1449,7 @@ public class MapGenerator : MonoBehaviour
     public bool IsEnemyInPlayerAttackRange(Enemy enemy, int attackRange)
     {
         if (enemy == null) return false;
-        return GetCombatDistance(GetPlayerTileCoords(), enemy.tileCoords) <= attackRange;
+        return GetTileDistance(GetPlayerTileCoords(), enemy.tileCoords) <= attackRange;
     }
 
     public void UpdateEnemyAttackIndicators()
@@ -1439,7 +1469,7 @@ public class MapGenerator : MonoBehaviour
             Enemy enemy = enemies[i];
             if (enemy == null) continue;
 
-            bool inRange = GetCombatDistance(playerCoords, enemy.tileCoords) <= playerAttackRange;
+            bool inRange = GetTileDistance(playerCoords, enemy.tileCoords) <= playerAttackRange;
             enemy.SetAttackIndicatorVisible(inRange);
         }
     }
