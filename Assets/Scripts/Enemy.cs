@@ -62,7 +62,10 @@ public class Enemy : MonoBehaviour
         if (currentHearts > 0) return;
 
         if (mapGen != null)
+        {
+            mapGen.DropHeartPickup(tileCoords, 1);
             mapGen.RemoveEnemy(this);
+        }
 
         ExplosionEffect.Spawn(transform.position, Color.yellow, Mathf.Max(transform.localScale.x, 1f));
         Destroy(gameObject);

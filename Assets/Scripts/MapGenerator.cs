@@ -122,6 +122,15 @@ public class MapGenerator : MonoBehaviour
     public Color moveTrailColor = new Color(0.7f, 0.55f, 0.35f, 1f);
     public Color enemyTrailColor = new Color(0.78f, 0.35f, 0.35f, 1f);
 
+    [Header("Heart Pickups")]
+    [Range(0f, 1f)]
+    public float heartPickupSpawnChance = 0.4f;
+    [Range(0, 3)]
+    public int maxHeartPickupsPerChunk = 2;
+    [Range(1, 3)]
+    public int maxHeartsPerPickup = 3;
+    public float heartPickupYOffset = 0.08f;
+
     [Header("Tile Layers (create these in Project Settings > Tags and Layers)")]
     public string walkableLayerName = "Walkable";
     public string blockedLayerName = "Blocked";
@@ -148,6 +157,7 @@ public class MapGenerator : MonoBehaviour
     private GameObject playerObj;
     private Transform previewRoot;
     private readonly List<Enemy> enemies = new List<Enemy>();
+    private readonly List<HealthPickup> healthPickups = new List<HealthPickup>();
 
     private Transform[,] tiles;
     private bool[,] isGreen;
@@ -398,6 +408,113 @@ public class MapGenerator : MonoBehaviour
         AddTrail(tile, GetEnemyTrailMaterial());
     }
 
+    void SpawnHeartPickupsForChunk(int chunkSeed)
+    {
+        if (Hash01(chunkSeed, 6200) > heartPickupSpawnChance) return;
+
+        int pickupCount = Mathf.RoundToInt(Mathf.Lerp(1f, maxHeartPickupsPerChunk, Hash01(chunkSeed, 6201)));
+        pickupCount = Mathf.Clamp(pickupCount, 0, maxHeartPickupsPerChunk);
+        if (pickupCount <= 0) return;
+
+        Vector2Int playerCoords = GetPlayerTileCoords();
+        List<Vector2Int> candidates = new List<Vector2Int>();
+
+        for (int x = 0; x < tileCount; x++)
+        {
+            for (int z = 0; z < tileCount; z++)
+            {
+                if (!IsTileWalkable(x, z)) continue;
+                if (IsEnemyAt(x, z)) continue;
+                if (playerCoords == new Vector2Int(x, z)) continue;
+                candidates.Add(new Vector2Int(x, z));
+            }
+        }
+
+        for (int i = 0; i < pickupCount && candidates.Count > 0; i++)
+        {
+            int index = Mathf.FloorToInt(Hash01(chunkSeed + i * 17, 6202 + i) * candidates.Count);
+            index = Mathf.Clamp(index, 0, candidates.Count - 1);
+
+            Vector2Int coords = candidates[index];
+            candidates.RemoveAt(index);
+
+            int hearts = 1 + Mathf.FloorToInt(Hash01(chunkSeed + i * 29, 6208 + i) * maxHeartsPerPickup);
+            hearts = Mathf.Clamp(hearts, 1, maxHeartsPerPickup);
+            DropHeartPickup(coords, hearts);
+        }
+    }
+
+    public void DropHeartPickup(Vector2Int coords, int hearts)
+    {
+        if (!IsTileWalkable(coords.x, coords.y)) return;
+
+        HealthPickup existing = GetHealthPickupAt(coords);
+        if (existing != null)
+        {
+            int combined = Mathf.Clamp(existing.heartsContained + hearts, 1, 3);
+            existing.Setup(this, coords, combined);
+            PositionHeartPickup(existing, coords);
+            return;
+        }
+
+        Transform tile = GetTileAt(coords.x, coords.y);
+        if (tile == null) return;
+
+        GameObject pickupObj = new GameObject($"HeartPickup_{coords.x}_{coords.y}");
+        pickupObj.transform.SetParent(transform, true);
+
+        HealthPickup pickup = pickupObj.AddComponent<HealthPickup>();
+        pickup.Setup(this, coords, Mathf.Clamp(hearts, 1, 3));
+        PositionHeartPickup(pickup, coords);
+        healthPickups.Add(pickup);
+    }
+
+    void PositionHeartPickup(HealthPickup pickup, Vector2Int coords)
+    {
+        if (pickup == null) return;
+
+        Transform tile = GetTileAt(coords.x, coords.y);
+        if (tile == null) return;
+
+        float tileTopY = tile.position.y + (tile.lossyScale.y * 0.5f);
+        pickup.transform.position = new Vector3(
+            tile.position.x,
+            tileTopY + heartPickupYOffset,
+            tile.position.z
+        );
+        pickup.transform.localScale = Vector3.one * (mapSize / tileCount);
+    }
+
+    HealthPickup GetHealthPickupAt(Vector2Int coords)
+    {
+        for (int i = 0; i < healthPickups.Count; i++)
+        {
+            HealthPickup pickup = healthPickups[i];
+            if (pickup == null) continue;
+            if (pickup.tileCoords == coords) return pickup;
+        }
+
+        return null;
+    }
+
+    public void RemoveHealthPickup(HealthPickup pickup)
+    {
+        healthPickups.Remove(pickup);
+    }
+
+    public void TryCollectHeartPickupAtPlayer()
+    {
+        if (playerObj == null) return;
+
+        Player player = playerObj.GetComponent<Player>();
+        if (player == null) return;
+
+        HealthPickup pickup = GetHealthPickupAt(GetPlayerTileCoords());
+        if (pickup == null) return;
+
+        pickup.TryCollect(player);
+    }
+
     void AddTrail(Transform tile, Material trailMaterial)
     {
         if (tile == null) return;
@@ -538,6 +655,7 @@ public class MapGenerator : MonoBehaviour
             SpawnPlayerOnSafeGreenCell();
 
         SpawnEnemiesForChunk(chunkSeed);
+        SpawnHeartPickupsForChunk(chunkSeed);
         UpdateEnemyAttackIndicators();
         GenerateNeighborPreviews();
     }
@@ -587,6 +705,7 @@ public class MapGenerator : MonoBehaviour
         }
 
         enemies.Clear();
+        healthPickups.Clear();
 
         tiles = new Transform[tileCount, tileCount];
         isGreen = new bool[tileCount, tileCount];

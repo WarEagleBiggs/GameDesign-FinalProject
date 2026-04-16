@@ -464,7 +464,10 @@ public class Player : MonoBehaviour
 
         mapGen.PlacePlayerOnTile(tile);
         if (mapGen != null)
+        {
+            mapGen.TryCollectHeartPickupAtPlayer();
             mapGen.UpdateEnemyAttackIndicators();
+        }
     }
 
     void CacheMoveTrailTiles(Transform fromTile, Transform toTile)
@@ -598,5 +601,13 @@ public class Player : MonoBehaviour
             mapGen.ShowDeathScreen();
         gameObject.SetActive(false);
         enabled = false;
+    }
+
+    public void Heal(int amount)
+    {
+        currentHearts = Mathf.Clamp(currentHearts + amount, 0, maxHearts);
+
+        if (mapGen != null)
+            mapGen.UpdatePlayerHealthUI(currentHearts, maxHearts);
     }
 }
