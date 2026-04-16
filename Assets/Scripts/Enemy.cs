@@ -11,12 +11,15 @@ public class Enemy : MonoBehaviour
     public Vector2Int tileCoords;
 
     private HitPulse hitPulse;
+    private GameObject attackIndicator;
 
     void Awake()
     {
         hitPulse = GetComponent<HitPulse>();
         if (hitPulse == null)
             hitPulse = gameObject.AddComponent<HitPulse>();
+
+        EnsureAttackIndicator();
     }
 
     public void Setup(MapGenerator generator, Vector2Int coords)
@@ -24,6 +27,8 @@ public class Enemy : MonoBehaviour
         mapGen = generator;
         tileCoords = coords;
         currentHearts = maxHearts;
+        EnsureAttackIndicator();
+        SetAttackIndicatorVisible(false);
     }
 
     public void MoveToTile(Transform tile, Vector2Int coords)
@@ -40,6 +45,8 @@ public class Enemy : MonoBehaviour
             tileTopY + enemyHalfY + mapGen.enemyYOffset,
             tile.position.z
         );
+
+        UpdateAttackIndicatorPosition();
     }
 
     public void TakeDamage(int amount)
@@ -56,5 +63,51 @@ public class Enemy : MonoBehaviour
             mapGen.RemoveEnemy(this);
 
         Destroy(gameObject);
+    }
+
+    public void SetAttackIndicatorVisible(bool visible)
+    {
+        EnsureAttackIndicator();
+        if (attackIndicator != null)
+            attackIndicator.SetActive(visible);
+    }
+
+    void EnsureAttackIndicator()
+    {
+        if (attackIndicator != null) return;
+
+        Transform found = transform.Find("AttackIndicator");
+        if (found != null)
+        {
+            attackIndicator = found.gameObject;
+            return;
+        }
+
+        attackIndicator = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+        attackIndicator.name = "AttackIndicator";
+        attackIndicator.transform.SetParent(transform, false);
+
+        Collider col = attackIndicator.GetComponent<Collider>();
+        if (col != null) Destroy(col);
+
+        Renderer rend = attackIndicator.GetComponent<Renderer>();
+        if (rend != null)
+        {
+            rend.material.color = Color.yellow;
+            rend.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            rend.receiveShadows = false;
+        }
+
+        UpdateAttackIndicatorPosition();
+        attackIndicator.SetActive(false);
+    }
+
+    void UpdateAttackIndicatorPosition()
+    {
+        if (attackIndicator == null) return;
+
+        float scale = Mathf.Max(transform.localScale.x, 0.01f);
+        attackIndicator.transform.localScale = new Vector3(scale * 0.65f, scale * 0.08f, scale * 0.65f);
+        attackIndicator.transform.localPosition = new Vector3(0f, scale * 1.35f, 0f);
     }
 }

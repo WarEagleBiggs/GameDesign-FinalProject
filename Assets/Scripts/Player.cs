@@ -16,11 +16,15 @@ public class Player : MonoBehaviour
     [Range(1, 10)]
     public int moveRange = 3;
     public bool allowDiagonal = true;
+    public bool showMoveTilesOnlyNearPlayer = true;
+    [Range(25f, 400f)]
+    public float moveTileRevealScreenDistance = 140f;
 
     [Header("Combat")]
     public int maxHearts = 3;
     public int currentHearts = 3;
     public int attackDamage = 1;
+    public int attackRange = 3;
 
     [Header("Highlight")]
     public Material highlightBlueMat;
@@ -76,6 +80,7 @@ public class Player : MonoBehaviour
     }
 
     private readonly List<ExitInfo> exits = new List<ExitInfo>();
+    private readonly List<Transform> pendingMoveTrailTiles = new List<Transform>();
     private HitPulse hitPulse;
 
     void Awake()
@@ -102,7 +107,15 @@ public class Player : MonoBehaviour
             return;
         }
 
-        if (highlightedTiles.Count == 0)
+        bool shouldShowMoveTiles = ShouldShowMoveTiles();
+
+        if (!shouldShowMoveTiles)
+        {
+            ClearHover();
+            ClearHighlights();
+            DestroyExits();
+        }
+        else if (highlightedTiles.Count == 0)
         {
             HighlightMovable();
             UpdateExitTiles();
@@ -110,8 +123,22 @@ public class Player : MonoBehaviour
 
         UpdateHover();
 
-        if (Input.GetMouseButtonDown(0))
+        if (shouldShowMoveTiles && Input.GetMouseButtonDown(0))
             HandleClick();
+    }
+
+    bool ShouldShowMoveTiles()
+    {
+        if (!showMoveTilesOnlyNearPlayer) return true;
+        if (cam == null) return true;
+
+        Vector3 playerScreenPos = cam.WorldToScreenPoint(transform.position);
+        if (playerScreenPos.z < 0f) return false;
+
+        Vector2 playerScreen = new Vector2(playerScreenPos.x, playerScreenPos.y);
+        Vector2 mouseScreen = Input.mousePosition;
+
+        return Vector2.Distance(playerScreen, mouseScreen) <= moveTileRevealScreenDistance;
     }
 
     void UpdateHover()
@@ -194,7 +221,7 @@ public class Player : MonoBehaviour
 
             if (mapGen != null && mapGen.TryGetEnemyFromHit(ht, out Enemy enemy))
             {
-                if (mapGen.IsEnemyInPlayerAttackRange(enemy))
+                if (mapGen.IsEnemyInPlayerAttackRange(enemy, attackRange))
                 {
                     enemy.TakeDamage(attackDamage);
                     EndPlayerTurn();
@@ -429,7 +456,38 @@ public class Player : MonoBehaviour
 
     void MovePlayerToTile(Transform tile)
     {
+        pendingMoveTrailTiles.Clear();
+
+        Transform previousTile = GetTileUnderPlayer();
+        if (mapGen != null && previousTile != null && tile != null)
+            CacheMoveTrailTiles(previousTile, tile);
+
         mapGen.PlacePlayerOnTile(tile);
+        if (mapGen != null)
+            mapGen.UpdateEnemyAttackIndicators();
+    }
+
+    void CacheMoveTrailTiles(Transform fromTile, Transform toTile)
+    {
+        if (mapGen == null) return;
+        if (!mapGen.TryParseTileCoords(fromTile.name, out int fromX, out int fromZ)) return;
+        if (!mapGen.TryParseTileCoords(toTile.name, out int toX, out int toZ)) return;
+
+        int currentX = fromX;
+        int currentZ = fromZ;
+
+        while (currentX != toX || currentZ != toZ)
+        {
+            Transform stepTile = mapGen.GetTileAt(currentX, currentZ);
+            if (stepTile != null && !pendingMoveTrailTiles.Contains(stepTile))
+                pendingMoveTrailTiles.Add(stepTile);
+
+            if (currentX < toX) currentX++;
+            else if (currentX > toX) currentX--;
+
+            if (currentZ < toZ) currentZ++;
+            else if (currentZ > toZ) currentZ--;
+        }
     }
 
     Transform GetTileUnderPlayer()
@@ -504,8 +562,18 @@ public class Player : MonoBehaviour
 
         ClearHover();
         ClearHighlights();
+
+        if (mapGen != null)
+        {
+            for (int i = 0; i < pendingMoveTrailTiles.Count; i++)
+                mapGen.AddPlayerMoveTrail(pendingMoveTrailTiles[i]);
+        }
+
+        pendingMoveTrailTiles.Clear();
         HighlightMovable();
         UpdateExitTiles();
+        if (mapGen != null)
+            mapGen.UpdateEnemyAttackIndicators();
     }
 
     public void TakeDamage(int amount)

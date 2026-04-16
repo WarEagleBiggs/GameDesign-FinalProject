@@ -113,9 +113,13 @@ public class MapGenerator : MonoBehaviour
     [Range(1, 3)]
     public int maxEnemiesPerChunk = 3;
     [Range(1, 10)]
-    public int enemyAttackRange = 3;
+    public int enemyAttackRange = 2;
     public int enemyDamage = 1;
     public float enemyYOffset = 0f;
+
+    [Header("Move Trail")]
+    public float moveTrailDuration = 1.2f;
+    public Color moveTrailColor = new Color(0.7f, 0.55f, 0.35f, 1f);
 
     [Header("Tile Layers (create these in Project Settings > Tags and Layers)")]
     public string walkableLayerName = "Walkable";
@@ -155,9 +159,18 @@ public class MapGenerator : MonoBehaviour
     private int ignoreRaycastLayer = -1;
 
     private readonly Dictionary<Material, Material> previewMaterialCache = new Dictionary<Material, Material>();
+    private readonly List<TrailTileState> trailTiles = new List<TrailTileState>();
     private GameObject deathScreenRoot;
     private TextMeshProUGUI deathTitleText;
     private Button deathMainMenuButton;
+    private Material moveTrailMaterial;
+
+    class TrailTileState
+    {
+        public Renderer renderer;
+        public Material originalMaterial;
+        public float expiresAt;
+    }
 
     void Awake()
     {
@@ -196,6 +209,7 @@ public class MapGenerator : MonoBehaviour
         }
         
         coinsText.SetText(coins.ToString());
+        UpdateMoveTrail();
     }
 
     void EnsurePlayerHeartRefs()
@@ -340,6 +354,76 @@ public class MapGenerator : MonoBehaviour
         SetDeathScreenVisible(true);
     }
 
+    Material GetMoveTrailMaterial()
+    {
+        if (moveTrailMaterial != null) return moveTrailMaterial;
+
+        Material source = brownMat != null ? brownMat : baseMat;
+        if (source != null)
+        {
+            moveTrailMaterial = new Material(source);
+            if (moveTrailMaterial.HasProperty("_BaseColor"))
+                moveTrailMaterial.SetColor("_BaseColor", moveTrailColor);
+            if (moveTrailMaterial.HasProperty("_Color"))
+                moveTrailMaterial.color = moveTrailColor;
+        }
+
+        return moveTrailMaterial;
+    }
+
+    public void AddPlayerMoveTrail(Transform tile)
+    {
+        if (tile == null) return;
+
+        Renderer renderer = tile.GetComponent<Renderer>();
+        if (renderer == null) return;
+
+        Material trailMaterial = GetMoveTrailMaterial();
+        if (trailMaterial == null) return;
+
+        TrailTileState existing = null;
+        for (int i = 0; i < trailTiles.Count; i++)
+        {
+            if (trailTiles[i].renderer == renderer)
+            {
+                existing = trailTiles[i];
+                break;
+            }
+        }
+
+        if (existing == null)
+        {
+            existing = new TrailTileState
+            {
+                renderer = renderer,
+                originalMaterial = renderer.sharedMaterial
+            };
+            trailTiles.Add(existing);
+        }
+
+        existing.expiresAt = Time.time + moveTrailDuration;
+        renderer.sharedMaterial = trailMaterial;
+    }
+
+    void UpdateMoveTrail()
+    {
+        for (int i = trailTiles.Count - 1; i >= 0; i--)
+        {
+            TrailTileState state = trailTiles[i];
+            if (state.renderer == null)
+            {
+                trailTiles.RemoveAt(i);
+                continue;
+            }
+
+            if (Time.time < state.expiresAt) continue;
+            if (state.renderer.sharedMaterial != moveTrailMaterial) continue;
+
+            state.renderer.sharedMaterial = state.originalMaterial;
+            trailTiles.RemoveAt(i);
+        }
+    }
+
     void EnsurePreviewRoot()
     {
         if (previewRoot != null) return;
@@ -418,6 +502,7 @@ public class MapGenerator : MonoBehaviour
             SpawnPlayerOnSafeGreenCell();
 
         SpawnEnemiesForChunk(chunkSeed);
+        UpdateEnemyAttackIndicators();
         GenerateNeighborPreviews();
     }
 
@@ -1241,9 +1326,11 @@ public class MapGenerator : MonoBehaviour
             }
 
             int distanceToPlayer = GetTileDistance(enemy.tileCoords, playerCoords);
-            if (distanceToPlayer <= enemyAttackRange)
+        if (distanceToPlayer <= enemyAttackRange)
                 player.TakeDamage(enemyDamage);
         }
+
+        UpdateEnemyAttackIndicators();
     }
 
     Vector2Int GetNextEnemyStep(Vector2Int from, Vector2Int playerCoords)
@@ -1288,10 +1375,32 @@ public class MapGenerator : MonoBehaviour
         return false;
     }
 
-    public bool IsEnemyInPlayerAttackRange(Enemy enemy)
+    public bool IsEnemyInPlayerAttackRange(Enemy enemy, int attackRange)
     {
         if (enemy == null) return false;
-        return GetTileDistance(GetPlayerTileCoords(), enemy.tileCoords) <= enemyAttackRange;
+        return GetTileDistance(GetPlayerTileCoords(), enemy.tileCoords) <= attackRange;
+    }
+
+    public void UpdateEnemyAttackIndicators()
+    {
+        Vector2Int playerCoords = GetPlayerTileCoords();
+        int playerAttackRange = enemyAttackRange;
+
+        if (playerObj != null)
+        {
+            Player player = playerObj.GetComponent<Player>();
+            if (player != null)
+                playerAttackRange = player.attackRange;
+        }
+
+        for (int i = 0; i < enemies.Count; i++)
+        {
+            Enemy enemy = enemies[i];
+            if (enemy == null) continue;
+
+            bool inRange = GetTileDistance(playerCoords, enemy.tileCoords) <= playerAttackRange;
+            enemy.SetAttackIndicatorVisible(inRange);
+        }
     }
 
     public bool IsEnemyAt(int x, int z)
