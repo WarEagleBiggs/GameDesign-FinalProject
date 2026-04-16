@@ -17,6 +17,11 @@ public class Player : MonoBehaviour
     public int moveRange = 3;
     public bool allowDiagonal = true;
 
+    [Header("Combat")]
+    public int maxHearts = 3;
+    public int currentHearts = 3;
+    public int attackDamage = 1;
+
     [Header("Highlight")]
     public Material highlightBlueMat;
 
@@ -71,10 +76,15 @@ public class Player : MonoBehaviour
     }
 
     private readonly List<ExitInfo> exits = new List<ExitInfo>();
+    private HitPulse hitPulse;
 
     void Awake()
     {
         if (cam == null) cam = Camera.main;
+        currentHearts = maxHearts;
+        hitPulse = GetComponent<HitPulse>();
+        if (hitPulse == null)
+            hitPulse = gameObject.AddComponent<HitPulse>();
     }
 
     void Update()
@@ -182,6 +192,20 @@ public class Player : MonoBehaviour
             Transform ht = hits[i].collider.transform;
             if (ht == null) continue;
 
+            if (mapGen != null && mapGen.TryGetEnemyFromHit(ht, out Enemy enemy))
+            {
+                if (mapGen.IsEnemyInPlayerAttackRange(enemy))
+                {
+                    enemy.TakeDamage(attackDamage);
+                    EndPlayerTurn();
+                }
+                else
+                {
+                    Debug.Log("Enemy is out of attack range.");
+                }
+                return;
+            }
+
             Transform clickedObj = ht;
 
             while (clickedObj != null)
@@ -227,10 +251,7 @@ public class Player : MonoBehaviour
             if (flattenWhenBlockingCamera)
                 FlattenTilesBlockingCamera();
 
-            ClearHover();
-            ClearHighlights();
-            HighlightMovable();
-            UpdateExitTiles();
+            EndPlayerTurn();
             return;
         }
     }
@@ -339,6 +360,9 @@ public class Player : MonoBehaviour
             if (!IsWalkableTile(tile))
                 continue;
 
+            if (mapGen != null && mapGen.IsEnemyAt(tx, tz))
+                continue;
+
             int dx = Mathf.Abs(tx - cx);
             int dz = Mathf.Abs(tz - cz);
 
@@ -433,20 +457,19 @@ public class Player : MonoBehaviour
     bool IsWalkableTile(Transform tile)
     {
         if (tile == null) return false;
-        return tile.gameObject.layer == LayerMask.NameToLayer(mapGen.walkableLayerName);
+        if (mapGen == null) return false;
+        if (!mapGen.TryParseTileCoords(tile.name, out int x, out int z)) return false;
+        return mapGen.IsTileWalkable(x, z);
     }
 
     bool TryParseTileCoords(string name, out int x, out int z)
     {
+        if (mapGen != null)
+            return mapGen.TryParseTileCoords(name, out x, out z);
+
         x = 0;
         z = 0;
-
-        if (!name.StartsWith("Tile_")) return false;
-
-        string[] parts = name.Split('_');
-        if (parts.Length < 3) return false;
-
-        return int.TryParse(parts[1], out x) && int.TryParse(parts[2], out z);
+        return false;
     }
 
     float GetTileSizeWorld()
@@ -472,5 +495,35 @@ public class Player : MonoBehaviour
 
         originalMats.Clear();
         highlightedTiles.Clear();
+    }
+
+    void EndPlayerTurn()
+    {
+        if (mapGen != null)
+            mapGen.ResolveEnemyTurn();
+
+        ClearHover();
+        ClearHighlights();
+        HighlightMovable();
+        UpdateExitTiles();
+    }
+
+    public void TakeDamage(int amount)
+    {
+        currentHearts = Mathf.Clamp(currentHearts - amount, 0, maxHearts);
+        if (hitPulse != null)
+            hitPulse.PlayPulse();
+
+        if (mapGen != null)
+            mapGen.UpdatePlayerHealthUI(currentHearts, maxHearts);
+
+        Debug.Log($"Player hit. Hearts left: {currentHearts}");
+
+        if (currentHearts > 0) return;
+
+        Debug.Log("Player defeated.");
+        if (mapGen != null)
+            mapGen.ShowDeathScreen();
+        enabled = false;
     }
 }

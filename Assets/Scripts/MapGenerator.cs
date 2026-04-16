@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
+using UnityEngine.SceneManagement;
 
 public class MapGenerator : MonoBehaviour
 {
@@ -103,6 +105,18 @@ public class MapGenerator : MonoBehaviour
     [Header("Spawn Rules")]
     public bool require3x3GreenForStart = true;
 
+    [Header("Enemy Settings")]
+    [Range(0f, 1f)]
+    public float enemySpawnChance = 0.7f;
+    [Range(1, 3)]
+    public int minEnemiesPerChunk = 1;
+    [Range(1, 3)]
+    public int maxEnemiesPerChunk = 3;
+    [Range(1, 10)]
+    public int enemyAttackRange = 3;
+    public int enemyDamage = 1;
+    public float enemyYOffset = 0f;
+
     [Header("Tile Layers (create these in Project Settings > Tags and Layers)")]
     public string walkableLayerName = "Walkable";
     public string blockedLayerName = "Blocked";
@@ -110,6 +124,15 @@ public class MapGenerator : MonoBehaviour
     [Header("UI")]
     public TextMeshProUGUI chunkText;
     public TextMeshProUGUI coinsText;
+    public Image[] playerHeartImages;
+    public Color fullHeartColor = Color.white;
+    public Color emptyHeartColor = new Color(1f, 1f, 1f, 0.2f);
+
+    [Header("Death Screen")]
+    public Color deathOverlayColor = new Color(0f, 0f, 0f, 0.75f);
+    public Color deathTitleColor = new Color(0.9f, 0.12f, 0.12f, 1f);
+    public Color deathButtonColor = new Color(0.15f, 0.15f, 0.15f, 0.95f);
+    public Color deathButtonTextColor = Color.white;
 
     [Header("Debug")]
     public bool doGen;
@@ -119,6 +142,7 @@ public class MapGenerator : MonoBehaviour
 
     private GameObject playerObj;
     private Transform previewRoot;
+    private readonly List<Enemy> enemies = new List<Enemy>();
 
     private Transform[,] tiles;
     private bool[,] isGreen;
@@ -131,6 +155,9 @@ public class MapGenerator : MonoBehaviour
     private int ignoreRaycastLayer = -1;
 
     private readonly Dictionary<Material, Material> previewMaterialCache = new Dictionary<Material, Material>();
+    private GameObject deathScreenRoot;
+    private TextMeshProUGUI deathTitleText;
+    private Button deathMainMenuButton;
 
     void Awake()
     {
@@ -142,6 +169,10 @@ public class MapGenerator : MonoBehaviour
 
     void Start()
     {
+        EnsurePlayerHeartRefs();
+        EnsureDeathScreen();
+        SetDeathScreenVisible(false);
+
         if (WorldSeedManager.Instance != null)
             worldSeed = WorldSeedManager.Instance.selectedSeed;
 
@@ -165,6 +196,148 @@ public class MapGenerator : MonoBehaviour
         }
         
         coinsText.SetText(coins.ToString());
+    }
+
+    void EnsurePlayerHeartRefs()
+    {
+        if (playerHeartImages != null && playerHeartImages.Length > 0)
+            return;
+
+        GameObject heartsRoot = GameObject.Find("Hearts");
+        if (heartsRoot == null) return;
+
+        List<Image> foundHearts = new List<Image>();
+        for (int i = 0; i < heartsRoot.transform.childCount; i++)
+        {
+            Image heart = heartsRoot.transform.GetChild(i).GetComponent<Image>();
+            if (heart != null)
+                foundHearts.Add(heart);
+        }
+
+        playerHeartImages = foundHearts.ToArray();
+    }
+
+    public void UpdatePlayerHealthUI(int currentHearts, int maxHearts)
+    {
+        EnsurePlayerHeartRefs();
+        if (playerHeartImages == null || playerHeartImages.Length == 0) return;
+
+        int visibleHearts = Mathf.Clamp(currentHearts, 0, maxHearts);
+
+        for (int i = 0; i < playerHeartImages.Length; i++)
+        {
+            if (playerHeartImages[i] == null) continue;
+            playerHeartImages[i].color = i < visibleHearts ? fullHeartColor : emptyHeartColor;
+        }
+    }
+
+    void EnsureDeathScreen()
+    {
+        if (deathScreenRoot != null) return;
+
+        Canvas canvas = FindObjectOfType<Canvas>();
+        if (canvas == null) return;
+
+        TMP_FontAsset uiFont = GetUIFont();
+
+        deathScreenRoot = new GameObject("DeathScreen");
+        deathScreenRoot.transform.SetParent(canvas.transform, false);
+
+        RectTransform rootRect = deathScreenRoot.AddComponent<RectTransform>();
+        rootRect.anchorMin = Vector2.zero;
+        rootRect.anchorMax = Vector2.one;
+        rootRect.offsetMin = Vector2.zero;
+        rootRect.offsetMax = Vector2.zero;
+
+        Image overlay = deathScreenRoot.AddComponent<Image>();
+        overlay.color = deathOverlayColor;
+        overlay.raycastTarget = true;
+
+        GameObject titleObj = new GameObject("DeathTitle");
+        titleObj.transform.SetParent(deathScreenRoot.transform, false);
+
+        RectTransform titleRect = titleObj.AddComponent<RectTransform>();
+        titleRect.anchorMin = new Vector2(0.5f, 0.5f);
+        titleRect.anchorMax = new Vector2(0.5f, 0.5f);
+        titleRect.anchoredPosition = new Vector2(0f, 70f);
+        titleRect.sizeDelta = new Vector2(900f, 160f);
+
+        deathTitleText = titleObj.AddComponent<TextMeshProUGUI>();
+        deathTitleText.text = "YOU DIED";
+        deathTitleText.alignment = TextAlignmentOptions.Center;
+        deathTitleText.fontSize = 90f;
+        deathTitleText.color = deathTitleColor;
+        if (uiFont != null) deathTitleText.font = uiFont;
+
+        GameObject buttonObj = new GameObject("MainMenuButton");
+        buttonObj.transform.SetParent(deathScreenRoot.transform, false);
+
+        RectTransform buttonRect = buttonObj.AddComponent<RectTransform>();
+        buttonRect.anchorMin = new Vector2(0.5f, 0.5f);
+        buttonRect.anchorMax = new Vector2(0.5f, 0.5f);
+        buttonRect.anchoredPosition = new Vector2(0f, -35f);
+        buttonRect.sizeDelta = new Vector2(340f, 90f);
+
+        Image buttonImage = buttonObj.AddComponent<Image>();
+        buttonImage.color = deathButtonColor;
+
+        deathMainMenuButton = buttonObj.AddComponent<Button>();
+        ColorBlock colors = deathMainMenuButton.colors;
+        colors.normalColor = deathButtonColor;
+        colors.highlightedColor = deathButtonColor * 1.1f;
+        colors.pressedColor = deathButtonColor * 0.9f;
+        colors.selectedColor = deathButtonColor;
+        colors.disabledColor = deathButtonColor * 0.7f;
+        deathMainMenuButton.colors = colors;
+        deathMainMenuButton.targetGraphic = buttonImage;
+        deathMainMenuButton.onClick.AddListener(LoadMainMenuFromDeathScreen);
+
+        GameObject buttonTextObj = new GameObject("Label");
+        buttonTextObj.transform.SetParent(buttonObj.transform, false);
+
+        RectTransform buttonTextRect = buttonTextObj.AddComponent<RectTransform>();
+        buttonTextRect.anchorMin = Vector2.zero;
+        buttonTextRect.anchorMax = Vector2.one;
+        buttonTextRect.offsetMin = Vector2.zero;
+        buttonTextRect.offsetMax = Vector2.zero;
+
+        TextMeshProUGUI buttonText = buttonTextObj.AddComponent<TextMeshProUGUI>();
+        buttonText.text = "MAIN MENU";
+        buttonText.alignment = TextAlignmentOptions.Center;
+        buttonText.fontSize = 40f;
+        buttonText.color = deathButtonTextColor;
+        if (uiFont != null) buttonText.font = uiFont;
+
+        deathScreenRoot.transform.SetAsLastSibling();
+    }
+
+    TMP_FontAsset GetUIFont()
+    {
+        if (chunkText != null && chunkText.font != null) return chunkText.font;
+        if (coinsText != null && coinsText.font != null) return coinsText.font;
+
+        TextMeshProUGUI anyText = FindObjectOfType<TextMeshProUGUI>();
+        return anyText != null ? anyText.font : null;
+    }
+
+    void LoadMainMenuFromDeathScreen()
+    {
+        SceneManager.LoadScene("MainMenu");
+    }
+
+    void SetDeathScreenVisible(bool visible)
+    {
+        EnsureDeathScreen();
+        if (deathScreenRoot == null) return;
+
+        deathScreenRoot.SetActive(visible);
+        if (visible)
+            deathScreenRoot.transform.SetAsLastSibling();
+    }
+
+    public void ShowDeathScreen()
+    {
+        SetDeathScreenVisible(true);
     }
 
     void EnsurePreviewRoot()
@@ -244,6 +417,7 @@ public class MapGenerator : MonoBehaviour
         else
             SpawnPlayerOnSafeGreenCell();
 
+        SpawnEnemiesForChunk(chunkSeed);
         GenerateNeighborPreviews();
     }
 
@@ -290,6 +464,8 @@ public class MapGenerator : MonoBehaviour
             if (previewRoot != null && c == previewRoot) continue;
             Destroy(c.gameObject);
         }
+
+        enemies.Clear();
 
         tiles = new Transform[tileCount, tileCount];
         isGreen = new bool[tileCount, tileCount];
@@ -956,6 +1132,10 @@ public class MapGenerator : MonoBehaviour
 
         playerObj.transform.localScale = new Vector3(tileSizeWorld, tileSizeWorld, tileSizeWorld);
 
+        HitPulse pulse = playerObj.GetComponent<HitPulse>();
+        if (pulse == null) pulse = playerObj.AddComponent<HitPulse>();
+        pulse.RefreshBaseScale();
+
         Renderer pr = playerObj.GetComponent<Renderer>();
         if (pr != null && playerMat != null)
             pr.sharedMaterial = playerMat;
@@ -969,6 +1149,7 @@ public class MapGenerator : MonoBehaviour
         p.hoverSelectedMat = hoverSelectedMat;
         p.moveRange = playerMoveRange;
         p.allowDiagonal = allowDiagonalMovement;
+        UpdatePlayerHealthUI(p.currentHearts, p.maxHearts);
 
         TileCutout cut = FindObjectOfType<TileCutout>();
         if (cut != null)
@@ -976,6 +1157,218 @@ public class MapGenerator : MonoBehaviour
             cut.target = playerObj.transform;
             cut.enabled = (currentBiome == BiomeType.Mountains);
         }
+    }
+
+    void SpawnEnemiesForChunk(int chunkSeed)
+    {
+        if (playerObj == null) return;
+        if (Hash01(chunkSeed, 9001) > enemySpawnChance) return;
+
+        int minCount = Mathf.Clamp(minEnemiesPerChunk, 1, 3);
+        int maxCount = Mathf.Clamp(maxEnemiesPerChunk, minCount, 3);
+        int enemyCount = Mathf.RoundToInt(Mathf.Lerp(minCount, maxCount, Hash01(chunkSeed, 9002)));
+
+        List<Vector2Int> candidates = new List<Vector2Int>();
+        Vector2Int playerCoords = GetPlayerTileCoords();
+
+        for (int x = 0; x < tileCount; x++)
+        {
+            for (int z = 0; z < tileCount; z++)
+            {
+                if (!IsTileWalkable(x, z)) continue;
+                if (playerCoords == new Vector2Int(x, z)) continue;
+                if (GetTileDistance(playerCoords, new Vector2Int(x, z)) <= 2) continue;
+                candidates.Add(new Vector2Int(x, z));
+            }
+        }
+
+        for (int i = 0; i < enemyCount && candidates.Count > 0; i++)
+        {
+            int pickSeed = chunkSeed + (i * 31);
+            int index = Mathf.FloorToInt(Hash01(pickSeed, 9003 + i) * candidates.Count);
+            index = Mathf.Clamp(index, 0, candidates.Count - 1);
+
+            Vector2Int coords = candidates[index];
+            candidates.RemoveAt(index);
+
+            SpawnEnemyAt(coords);
+
+            for (int c = candidates.Count - 1; c >= 0; c--)
+                if (GetTileDistance(coords, candidates[c]) <= 1)
+                    candidates.RemoveAt(c);
+        }
+    }
+
+    void SpawnEnemyAt(Vector2Int coords)
+    {
+        Transform tile = GetTileAt(coords.x, coords.y);
+        if (tile == null) return;
+
+        GameObject enemyObj = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        enemyObj.name = $"Enemy_{coords.x}_{coords.y}";
+        enemyObj.transform.SetParent(transform, true);
+        enemyObj.transform.localScale = Vector3.one * (mapSize / tileCount);
+
+        Renderer rend = enemyObj.GetComponent<Renderer>();
+        if (rend != null)
+            rend.material.color = Color.red;
+
+        Enemy enemy = enemyObj.AddComponent<Enemy>();
+        enemy.Setup(this, coords);
+        enemy.MoveToTile(tile, coords);
+        enemies.Add(enemy);
+    }
+
+    public void ResolveEnemyTurn()
+    {
+        Player player = playerObj != null ? playerObj.GetComponent<Player>() : null;
+        if (player == null) return;
+
+        Vector2Int playerCoords = GetPlayerTileCoords();
+        List<Enemy> activeEnemies = new List<Enemy>(enemies);
+
+        for (int i = 0; i < activeEnemies.Count; i++)
+        {
+            Enemy enemy = activeEnemies[i];
+            if (enemy == null) continue;
+
+            Vector2Int nextStep = GetNextEnemyStep(enemy.tileCoords, playerCoords);
+            if (nextStep != enemy.tileCoords)
+            {
+                Transform nextTile = GetTileAt(nextStep.x, nextStep.y);
+                if (nextTile != null)
+                    enemy.MoveToTile(nextTile, nextStep);
+            }
+
+            int distanceToPlayer = GetTileDistance(enemy.tileCoords, playerCoords);
+            if (distanceToPlayer <= enemyAttackRange)
+                player.TakeDamage(enemyDamage);
+        }
+    }
+
+    Vector2Int GetNextEnemyStep(Vector2Int from, Vector2Int playerCoords)
+    {
+        Vector2Int best = from;
+        int bestDistance = GetTileDistance(from, playerCoords);
+
+        for (int dx = -1; dx <= 1; dx++)
+        {
+            for (int dz = -1; dz <= 1; dz++)
+            {
+                if (dx == 0 && dz == 0) continue;
+
+                Vector2Int candidate = new Vector2Int(from.x + dx, from.y + dz);
+                if (!IsTileWalkable(candidate.x, candidate.y)) continue;
+                if (IsEnemyAt(candidate.x, candidate.y)) continue;
+                if (candidate == playerCoords) continue;
+
+                int dist = GetTileDistance(candidate, playerCoords);
+                if (dist >= bestDistance) continue;
+
+                best = candidate;
+                bestDistance = dist;
+            }
+        }
+
+        return best;
+    }
+
+    public bool TryGetEnemyFromHit(Transform hitTransform, out Enemy enemy)
+    {
+        enemy = null;
+
+        Transform current = hitTransform;
+        while (current != null)
+        {
+            enemy = current.GetComponent<Enemy>();
+            if (enemy != null) return true;
+            current = current.parent;
+        }
+
+        return false;
+    }
+
+    public bool IsEnemyInPlayerAttackRange(Enemy enemy)
+    {
+        if (enemy == null) return false;
+        return GetTileDistance(GetPlayerTileCoords(), enemy.tileCoords) <= enemyAttackRange;
+    }
+
+    public bool IsEnemyAt(int x, int z)
+    {
+        for (int i = 0; i < enemies.Count; i++)
+        {
+            Enemy enemy = enemies[i];
+            if (enemy == null) continue;
+            if (enemy.tileCoords.x == x && enemy.tileCoords.y == z) return true;
+        }
+
+        return false;
+    }
+
+    public void RemoveEnemy(Enemy enemy)
+    {
+        enemies.Remove(enemy);
+    }
+
+    public bool IsTileWalkable(int x, int z)
+    {
+        if (x < 0 || z < 0 || x >= tileCount || z >= tileCount) return false;
+        if (tiles == null || tiles[x, z] == null) return false;
+        return tiles[x, z].gameObject.layer == walkableLayer;
+    }
+
+    public Transform GetTileAt(int x, int z)
+    {
+        if (x < 0 || z < 0 || x >= tileCount || z >= tileCount) return null;
+        return tiles != null ? tiles[x, z] : null;
+    }
+
+    public Vector2Int GetPlayerTileCoords()
+    {
+        Transform tile = GetTileUnderWorldPosition(playerObj != null ? playerObj.transform.position : Vector3.zero);
+        if (tile != null && TryParseTileCoords(tile.name, out int x, out int z))
+            return new Vector2Int(x, z);
+
+        return Vector2Int.zero;
+    }
+
+    Transform GetTileUnderWorldPosition(Vector3 worldPos)
+    {
+        Vector3 origin = worldPos + Vector3.up * 5f;
+        RaycastHit[] hits = Physics.RaycastAll(origin, Vector3.down, 200f, ~0, QueryTriggerInteraction.Ignore);
+        if (hits == null || hits.Length == 0) return null;
+
+        System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+
+        for (int i = 0; i < hits.Length; i++)
+        {
+            if (hits[i].collider == null) continue;
+
+            Transform t = hits[i].collider.transform;
+            if (t != null && t.name.StartsWith("Tile_"))
+                return t;
+        }
+
+        return null;
+    }
+
+    public bool TryParseTileCoords(string tileName, out int x, out int z)
+    {
+        x = 0;
+        z = 0;
+
+        if (!tileName.StartsWith("Tile_")) return false;
+
+        string[] parts = tileName.Split('_');
+        if (parts.Length < 3) return false;
+
+        return int.TryParse(parts[1], out x) && int.TryParse(parts[2], out z);
+    }
+
+    public int GetTileDistance(Vector2Int a, Vector2Int b)
+    {
+        return Mathf.Max(Mathf.Abs(a.x - b.x), Mathf.Abs(a.y - b.y));
     }
 
     void SpawnPlayerOnSafeGreenCell()

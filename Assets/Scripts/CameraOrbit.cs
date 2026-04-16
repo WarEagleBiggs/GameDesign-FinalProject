@@ -20,7 +20,14 @@ public class CameraOrbit : MonoBehaviour
     public float maxOrthoSize = 15f;
     public float defaultOrthoSize = 5f;
 
+    [Header("Follow Smoothing")]
+    public bool smoothFollow = true;
+    [Range(0.01f, 1f)]
+    public float followSmoothTime = 0.18f;
+    public float snapDistance = 12f;
+
     private Camera cam;
+    private Vector3 followVelocity;
 
     void Start()
     {
@@ -64,8 +71,23 @@ public class CameraOrbit : MonoBehaviour
 
         Quaternion rotation = Quaternion.Euler(tiltAngle, yaw, 0f);
         Vector3 offset = rotation * new Vector3(0f, 0f, -distance);
+        Vector3 desiredPosition = target.position + offset;
 
-        transform.position = target.position + offset;
+        if (!smoothFollow || Vector3.Distance(transform.position, desiredPosition) > snapDistance)
+        {
+            transform.position = desiredPosition;
+            followVelocity = Vector3.zero;
+        }
+        else
+        {
+            transform.position = Vector3.SmoothDamp(
+                transform.position,
+                desiredPosition,
+                ref followVelocity,
+                followSmoothTime
+            );
+        }
+
         transform.LookAt(target.position);
     }
 
