@@ -573,7 +573,10 @@ public class Player : MonoBehaviour
         HighlightMovable();
         UpdateExitTiles();
         if (mapGen != null)
+        {
+            mapGen.RefreshTrailVisuals();
             mapGen.UpdateEnemyAttackIndicators();
+        }
     }
 
     public void TakeDamage(int amount)

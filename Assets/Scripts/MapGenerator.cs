@@ -120,6 +120,7 @@ public class MapGenerator : MonoBehaviour
     [Header("Move Trail")]
     public float moveTrailDuration = 1.2f;
     public Color moveTrailColor = new Color(0.7f, 0.55f, 0.35f, 1f);
+    public Color enemyTrailColor = new Color(0.78f, 0.35f, 0.35f, 1f);
 
     [Header("Tile Layers (create these in Project Settings > Tags and Layers)")]
     public string walkableLayerName = "Walkable";
@@ -164,11 +165,13 @@ public class MapGenerator : MonoBehaviour
     private TextMeshProUGUI deathTitleText;
     private Button deathMainMenuButton;
     private Material moveTrailMaterial;
+    private Material enemyTrailMaterial;
 
     class TrailTileState
     {
         public Renderer renderer;
         public Material originalMaterial;
+        public Material trailMaterial;
         public float expiresAt;
     }
 
@@ -358,27 +361,49 @@ public class MapGenerator : MonoBehaviour
     {
         if (moveTrailMaterial != null) return moveTrailMaterial;
 
-        Material source = brownMat != null ? brownMat : baseMat;
-        if (source != null)
-        {
-            moveTrailMaterial = new Material(source);
-            if (moveTrailMaterial.HasProperty("_BaseColor"))
-                moveTrailMaterial.SetColor("_BaseColor", moveTrailColor);
-            if (moveTrailMaterial.HasProperty("_Color"))
-                moveTrailMaterial.color = moveTrailColor;
-        }
+        moveTrailMaterial = CreateTrailMaterial(moveTrailColor);
 
         return moveTrailMaterial;
     }
 
+    Material GetEnemyTrailMaterial()
+    {
+        if (enemyTrailMaterial != null) return enemyTrailMaterial;
+
+        enemyTrailMaterial = CreateTrailMaterial(enemyTrailColor);
+        return enemyTrailMaterial;
+    }
+
+    Material CreateTrailMaterial(Color color)
+    {
+        Material source = brownMat != null ? brownMat : baseMat;
+        if (source == null) return null;
+
+        Material mat = new Material(source);
+        if (mat.HasProperty("_BaseColor"))
+            mat.SetColor("_BaseColor", color);
+        if (mat.HasProperty("_Color"))
+            mat.color = color;
+        return mat;
+    }
+
     public void AddPlayerMoveTrail(Transform tile)
+    {
+        AddTrail(tile, GetMoveTrailMaterial());
+    }
+
+    public void AddEnemyMoveTrail(Transform tile)
+    {
+        AddTrail(tile, GetEnemyTrailMaterial());
+    }
+
+    void AddTrail(Transform tile, Material trailMaterial)
     {
         if (tile == null) return;
 
         Renderer renderer = tile.GetComponent<Renderer>();
         if (renderer == null) return;
 
-        Material trailMaterial = GetMoveTrailMaterial();
         if (trailMaterial == null) return;
 
         TrailTileState existing = null;
@@ -401,6 +426,7 @@ public class MapGenerator : MonoBehaviour
             trailTiles.Add(existing);
         }
 
+        existing.trailMaterial = trailMaterial;
         existing.expiresAt = Time.time + moveTrailDuration;
         renderer.sharedMaterial = trailMaterial;
     }
@@ -416,12 +442,21 @@ public class MapGenerator : MonoBehaviour
                 continue;
             }
 
-            if (Time.time < state.expiresAt) continue;
-            if (state.renderer.sharedMaterial != moveTrailMaterial) continue;
+            if (Time.time < state.expiresAt)
+            {
+                if (state.trailMaterial != null && state.renderer.sharedMaterial != state.trailMaterial)
+                    state.renderer.sharedMaterial = state.trailMaterial;
+                continue;
+            }
 
             state.renderer.sharedMaterial = state.originalMaterial;
             trailTiles.RemoveAt(i);
         }
+    }
+
+    public void RefreshTrailVisuals()
+    {
+        UpdateMoveTrail();
     }
 
     void EnsurePreviewRoot()
@@ -1317,16 +1352,22 @@ public class MapGenerator : MonoBehaviour
             Enemy enemy = activeEnemies[i];
             if (enemy == null) continue;
 
+            Vector2Int previousCoords = enemy.tileCoords;
             Vector2Int nextStep = GetNextEnemyStep(enemy.tileCoords, playerCoords);
             if (nextStep != enemy.tileCoords)
             {
                 Transform nextTile = GetTileAt(nextStep.x, nextStep.y);
                 if (nextTile != null)
+                {
+                    Transform previousTile = GetTileAt(previousCoords.x, previousCoords.y);
+                    if (previousTile != null)
+                        AddEnemyMoveTrail(previousTile);
                     enemy.MoveToTile(nextTile, nextStep);
+                }
             }
 
-            int distanceToPlayer = GetTileDistance(enemy.tileCoords, playerCoords);
-        if (distanceToPlayer <= enemyAttackRange)
+            int distanceToPlayer = GetCombatDistance(enemy.tileCoords, playerCoords);
+            if (distanceToPlayer <= enemyAttackRange)
                 player.TakeDamage(enemyDamage);
         }
 
@@ -1378,7 +1419,7 @@ public class MapGenerator : MonoBehaviour
     public bool IsEnemyInPlayerAttackRange(Enemy enemy, int attackRange)
     {
         if (enemy == null) return false;
-        return GetTileDistance(GetPlayerTileCoords(), enemy.tileCoords) <= attackRange;
+        return GetCombatDistance(GetPlayerTileCoords(), enemy.tileCoords) <= attackRange;
     }
 
     public void UpdateEnemyAttackIndicators()
@@ -1398,7 +1439,7 @@ public class MapGenerator : MonoBehaviour
             Enemy enemy = enemies[i];
             if (enemy == null) continue;
 
-            bool inRange = GetTileDistance(playerCoords, enemy.tileCoords) <= playerAttackRange;
+            bool inRange = GetCombatDistance(playerCoords, enemy.tileCoords) <= playerAttackRange;
             enemy.SetAttackIndicatorVisible(inRange);
         }
     }
@@ -1478,6 +1519,11 @@ public class MapGenerator : MonoBehaviour
     public int GetTileDistance(Vector2Int a, Vector2Int b)
     {
         return Mathf.Max(Mathf.Abs(a.x - b.x), Mathf.Abs(a.y - b.y));
+    }
+
+    public int GetCombatDistance(Vector2Int a, Vector2Int b)
+    {
+        return Mathf.Abs(a.x - b.x) + Mathf.Abs(a.y - b.y);
     }
 
     void SpawnPlayerOnSafeGreenCell()

@@ -12,6 +12,7 @@ public class Enemy : MonoBehaviour
 
     private HitPulse hitPulse;
     private GameObject attackIndicator;
+    private Material attackIndicatorMaterial;
 
     void Awake()
     {
@@ -86,6 +87,7 @@ public class Enemy : MonoBehaviour
         attackIndicator = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
         attackIndicator.name = "AttackIndicator";
         attackIndicator.transform.SetParent(transform, false);
+        attackIndicator.layer = LayerMask.NameToLayer("Ignore Raycast");
 
         Collider col = attackIndicator.GetComponent<Collider>();
         if (col != null) Destroy(col);
@@ -93,7 +95,24 @@ public class Enemy : MonoBehaviour
         Renderer rend = attackIndicator.GetComponent<Renderer>();
         if (rend != null)
         {
-            rend.material.color = Color.yellow;
+            Shader unlitShader = Shader.Find("Universal Render Pipeline/Unlit");
+            if (unlitShader == null)
+                unlitShader = Shader.Find("Unlit/Color");
+
+            if (unlitShader != null)
+            {
+                attackIndicatorMaterial = new Material(unlitShader);
+                if (attackIndicatorMaterial.HasProperty("_BaseColor"))
+                    attackIndicatorMaterial.SetColor("_BaseColor", Color.yellow);
+                if (attackIndicatorMaterial.HasProperty("_Color"))
+                    attackIndicatorMaterial.color = Color.yellow;
+                rend.sharedMaterial = attackIndicatorMaterial;
+            }
+            else
+            {
+                rend.material.color = Color.yellow;
+            }
+
             rend.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             rend.receiveShadows = false;
         }
@@ -107,7 +126,7 @@ public class Enemy : MonoBehaviour
         if (attackIndicator == null) return;
 
         float scale = Mathf.Max(transform.localScale.x, 0.01f);
-        attackIndicator.transform.localScale = new Vector3(scale * 0.65f, scale * 0.08f, scale * 0.65f);
-        attackIndicator.transform.localPosition = new Vector3(0f, scale * 1.35f, 0f);
+        attackIndicator.transform.localScale = new Vector3(scale * 1.1f, scale * 0.05f, scale * 1.1f);
+        attackIndicator.transform.localPosition = new Vector3(0f, scale * 1.9f, 0f);
     }
 }
