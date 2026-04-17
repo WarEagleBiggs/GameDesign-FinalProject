@@ -92,6 +92,7 @@ public class MapGenerator : MonoBehaviour
     [Header("Player Settings")]
     public GameObject playerPrefab;
     public Material playerMat;
+    public Material enemyMat;
     public Material highlightBlueMat;
     public Material hoverSelectedMat;
     [Range(1, 20)]
@@ -176,6 +177,7 @@ public class MapGenerator : MonoBehaviour
     private Button deathMainMenuButton;
     private Material moveTrailMaterial;
     private Material enemyTrailMaterial;
+    private Material runtimeEnemyMaterial;
 
     class TrailTileState
     {
@@ -383,6 +385,30 @@ public class MapGenerator : MonoBehaviour
 
         enemyTrailMaterial = CreateTrailMaterial(enemyTrailColor);
         return enemyTrailMaterial;
+    }
+
+    Material GetEnemyMaterial()
+    {
+        if (enemyMat != null) return enemyMat;
+        if (runtimeEnemyMaterial != null) return runtimeEnemyMaterial;
+
+        Shader shader = Shader.Find("Universal Render Pipeline/Lit");
+        if (shader == null)
+            shader = Shader.Find("Standard");
+        if (shader == null)
+            shader = Shader.Find("Unlit/Color");
+
+        if (shader == null) return null;
+
+        runtimeEnemyMaterial = new Material(shader);
+        Color enemyColor = Color.red;
+
+        if (runtimeEnemyMaterial.HasProperty("_BaseColor"))
+            runtimeEnemyMaterial.SetColor("_BaseColor", enemyColor);
+        if (runtimeEnemyMaterial.HasProperty("_Color"))
+            runtimeEnemyMaterial.SetColor("_Color", enemyColor);
+
+        return runtimeEnemyMaterial;
     }
 
     Material CreateTrailMaterial(Color color)
@@ -1451,7 +1477,11 @@ public class MapGenerator : MonoBehaviour
 
         Renderer rend = enemyObj.GetComponent<Renderer>();
         if (rend != null)
-            rend.material.color = Color.red;
+        {
+            Material materialToUse = GetEnemyMaterial();
+            if (materialToUse != null)
+                rend.sharedMaterial = materialToUse;
+        }
 
         Enemy enemy = enemyObj.AddComponent<Enemy>();
         enemy.Setup(this, coords);

@@ -485,7 +485,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: v. 0.5a
+  m_text: v. 1.1a
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 4c8e83964714d6c408a8e5fb9feb3b48, type: 2}
   m_sharedMaterial: {fileID: -2429469343505622886, guid: 4c8e83964714d6c408a8e5fb9feb3b48,
@@ -1044,6 +1044,9 @@ MonoBehaviour:
   minOrthoSize: 1
   maxOrthoSize: 10
   defaultOrthoSize: 5
+  smoothFollow: 1
+  followSmoothTime: 0.18
+  snapDistance: 12
 --- !u!114 &1089303712
 MonoBehaviour:
   m_ObjectHideFlags: 0
