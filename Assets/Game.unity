@@ -426,6 +426,7 @@ MonoBehaviour:
   playerPrefab: {fileID: 1987044566561294939, guid: 0454ea3c93ed6d94e98cdbae6b527e73,
     type: 3}
   playerMat: {fileID: 2100000, guid: 4ed83f78d770ce64f8db4a1d1971f35f, type: 2}
+  enemyMat: {fileID: 0}
   highlightBlueMat: {fileID: 2100000, guid: a492922b57e1ffe4daeab992b1ed29bb, type: 2}
   hoverSelectedMat: {fileID: 2100000, guid: 8035abebc245afb4ea83bdfe549ef296, type: 2}
   playerMoveRange: 2
@@ -433,10 +434,30 @@ MonoBehaviour:
   focusCameraOnPlayer: 1
   cameraOrbit: {fileID: 1089303711}
   require3x3GreenForStart: 1
+  enemySpawnChance: 0.7
+  minEnemiesPerChunk: 1
+  maxEnemiesPerChunk: 3
+  enemyAttackRange: 2
+  enemyDamage: 1
+  enemyYOffset: 0
+  moveTrailDuration: 1.2
+  moveTrailColor: {r: 0.7, g: 0.55, b: 0.35, a: 1}
+  enemyTrailColor: {r: 0.78, g: 0.35, b: 0.35, a: 1}
+  heartPickupSpawnChance: 0.4
+  maxHeartPickupsPerChunk: 2
+  maxHeartsPerPickup: 3
+  heartPickupYOffset: 0.08
   walkableLayerName: Walkable
   blockedLayerName: Blocked
   chunkText: {fileID: 62406708}
   coinsText: {fileID: 1610925496}
+  playerHeartImages: []
+  fullHeartColor: {r: 1, g: 1, b: 1, a: 1}
+  emptyHeartColor: {r: 1, g: 1, b: 1, a: 0.2}
+  deathOverlayColor: {r: 0, g: 0, b: 0, a: 0.75}
+  deathTitleColor: {r: 0.9, g: 0.12, b: 0.12, a: 1}
+  deathButtonColor: {r: 0.15, g: 0.15, b: 0.15, a: 0.95}
+  deathButtonTextColor: {r: 1, g: 1, b: 1, a: 1}
   doGen: 0
   currentBiome: 1
   playerYOffset: -0.12
@@ -1438,6 +1459,9 @@ MonoBehaviour:
   minOrthoSize: 1
   maxOrthoSize: 10
   defaultOrthoSize: 5
+  smoothFollow: 1
+  followSmoothTime: 0.18
+  snapDistance: 12
 --- !u!114 &1089303712
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1518,6 +1542,134 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1111874534
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1111874536}
+  - component: {fileID: 1111874535}
+  m_Layer: 0
+  m_Name: Music
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!82 &1111874535
+AudioSource:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1111874534}
+  m_Enabled: 1
+  serializedVersion: 4
+  OutputAudioMixerGroup: {fileID: 0}
+  m_audioClip: {fileID: 8300000, guid: 91edcb1d28eddaf4eae641245df4c6ce, type: 3}
+  m_PlayOnAwake: 1
+  m_Volume: 0.4
+  m_Pitch: 1
+  Loop: 1
+  Mute: 0
+  Spatialize: 0
+  SpatializePostEffects: 0
+  Priority: 128
+  DopplerLevel: 1
+  MinDistance: 1
+  MaxDistance: 500
+  Pan2D: 0
+  rolloffMode: 0
+  BypassEffects: 0
+  BypassListenerEffects: 0
+  BypassReverbZones: 0
+  rolloffCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    - serializedVersion: 3
+      time: 1
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  panLevelCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  spreadCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  reverbZoneMixCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+--- !u!4 &1111874536
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1111874534}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 4.625, y: 0.35999998, z: -4.375}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -3752,3 +3904,4 @@ SceneRoots:
   - {fileID: 2129339852}
   - {fileID: 1898064211}
   - {fileID: 1982936942}
+  - {fileID: 1111874536}
